@@ -1,0 +1,63 @@
+use std::collections::HashMap;
+use polars::prelude::DataType;
+
+pub fn dtypes() -> HashMap<String, DataType> {
+    let mut dtypes: HashMap<String, DataType> = HashMap::new();
+    dtypes.insert("FLOW_START_MILLISECONDS".to_string(), DataType::Int64);
+    dtypes.insert("FLOW_END_MILLISECONDS".to_string(), DataType::Int64);
+    dtypes.insert("IPV4_SRC_ADDR".to_string(), DataType::String);
+    dtypes.insert("L4_SRC_PORT".to_string(), DataType::Int64);
+    dtypes.insert("IPV4_DST_ADDR".to_string(), DataType::String);
+    dtypes.insert("L4_DST_PORT".to_string(), DataType::Int64);
+    dtypes.insert("PROTOCOL".to_string(), DataType::Int64);
+    dtypes.insert("L7_PROTO".to_string(), DataType::Float64);
+    dtypes.insert("IN_BYTES".to_string(), DataType::Int64);
+    dtypes.insert("IN_PKTS".to_string(), DataType::Int64);
+    dtypes.insert("OUT_BYTES".to_string(), DataType::Int64);
+    dtypes.insert("OUT_PKTS".to_string(), DataType::Int64);
+    dtypes.insert("TCP_FLAGS".to_string(), DataType::Int64);
+    dtypes.insert("CLIENT_TCP_FLAGS".to_string(), DataType::Int64);
+    dtypes.insert("SERVER_TCP_FLAGS".to_string(), DataType::Int64);
+    dtypes.insert("FLOW_DURATION_MILLISECONDS".to_string(), DataType::Int64);
+    dtypes.insert("DURATION_IN".to_string(), DataType::Int64);
+    dtypes.insert("DURATION_OUT".to_string(), DataType::Int64);
+    dtypes.insert("MIN_TTL".to_string(), DataType::Int64);
+    dtypes.insert("MAX_TTL".to_string(), DataType::Int64);
+    dtypes.insert("LONGEST_FLOW_PKT".to_string(), DataType::Int64);
+    dtypes.insert("SHORTEST_FLOW_PKT".to_string(), DataType::Int64);
+    dtypes.insert("MIN_IP_PKT_LEN".to_string(), DataType::Int64);
+    dtypes.insert("MAX_IP_PKT_LEN".to_string(), DataType::Int64);
+    dtypes.insert("SRC_TO_DST_SECOND_BYTES".to_string(), DataType::Float64);
+    dtypes.insert("DST_TO_SRC_SECOND_BYTES".to_string(), DataType::Float64);
+    dtypes.insert("RETRANSMITTED_IN_BYTES".to_string(), DataType::Int64);
+    dtypes.insert("RETRANSMITTED_IN_PKTS".to_string(), DataType::Int64);
+    dtypes.insert("RETRANSMITTED_OUT_BYTES".to_string(), DataType::Int64);
+    dtypes.insert("RETRANSMITTED_OUT_PKTS".to_string(), DataType::Int64);
+    dtypes.insert("SRC_TO_DST_AVG_THROUGHPUT".to_string(), DataType::Int64);
+    dtypes.insert("DST_TO_SRC_AVG_THROUGHPUT".to_string(), DataType::Int64);
+    dtypes.insert("NUM_PKTS_UP_TO_128_BYTES".to_string(), DataType::Int64);
+    dtypes.insert("NUM_PKTS_128_TO_256_BYTES".to_string(), DataType::Int64);
+    dtypes.insert("NUM_PKTS_256_TO_512_BYTES".to_string(), DataType::Int64);
+    dtypes.insert("NUM_PKTS_512_TO_1024_BYTES".to_string(), DataType::Int64);
+    dtypes.insert("NUM_PKTS_1024_TO_1514_BYTES".to_string(), DataType::Int64);
+    dtypes.insert("TCP_WIN_MAX_IN".to_string(), DataType::Int64);
+    dtypes.insert("TCP_WIN_MAX_OUT".to_string(), DataType::Int64);
+    dtypes.insert("ICMP_TYPE".to_string(), DataType::Int64);
+    dtypes.insert("ICMP_IPV4_TYPE".to_string(), DataType::Int64);
+    dtypes.insert("DNS_QUERY_ID".to_string(), DataType::Int64);
+    dtypes.insert("DNS_QUERY_TYPE".to_string(), DataType::Int64);
+    dtypes.insert("DNS_TTL_ANSWER".to_string(), DataType::Int64);
+    dtypes.insert("FTP_COMMAND_RET_CODE".to_string(), DataType::Int64);
+    dtypes.insert("SRC_TO_DST_IAT_MIN".to_string(), DataType::Int64);
+    dtypes.insert("SRC_TO_DST_IAT_MAX".to_string(), DataType::Int64);
+    dtypes.insert("SRC_TO_DST_IAT_AVG".to_string(), DataType::Int64);
+    dtypes.insert("SRC_TO_DST_IAT_STDDEV".to_string(), DataType::Int64);
+    dtypes.insert("DST_TO_SRC_IAT_MIN".to_string(), DataType::Int64);
+    dtypes.insert("DST_TO_SRC_IAT_MAX".to_string(), DataType::Int64);
+    dtypes.insert("DST_TO_SRC_IAT_AVG".to_string(), DataType::Int64);
+    dtypes.insert("DST_TO_SRC_IAT_STDDEV".to_string(), DataType::Int64);
+    dtypes.insert("Label".to_string(), DataType::Int64);
+    dtypes.insert("Attack".to_string(), DataType::String);
+
+    dtypes
+}
