@@ -8,7 +8,6 @@ sys.path.append(parent_dir)
 
 import data
 from data.dataset import read_dataset
-from tqdm import tqdm
 
 
 datasets = [
