@@ -8,3 +8,4 @@
 # from .knn_test import *
 # from .smote_test import *
 # from .dataset_smote_test import *
+from .datasets_info import *

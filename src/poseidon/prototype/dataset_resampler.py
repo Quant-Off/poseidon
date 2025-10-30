@@ -4,7 +4,6 @@ import pandas as pd
 from dotenv import load_dotenv
 from poseidon.data.dataset import read_dataset, clip_partition, shuffle_and_split
 from poseidon.data.smote_knn import smote
-from imblearn.over_sampling import SMOTE
 
 # 환경 변수 로드
 load_dotenv(verbose=True)
@@ -27,7 +26,9 @@ def resample_dataset(
     print("> 오류값 정정 중...")
     dask_df = dask_df.replace([np.inf, -np.inf], np.nan).dropna()
     print("\t- NaN, Inf 처리 완료")
-    dask_df = dask_df.drop(columns=["IPV4_SRC_ADDR", "IPV4_DST_ADDR", "L4_SRC_PORT", "L4_DST_PORT"])
+    dask_df = dask_df.drop(
+        columns=["IPV4_SRC_ADDR", "IPV4_DST_ADDR", "L4_SRC_PORT", "L4_DST_PORT"]
+    )
     print("\t- 불필요한 피처 제거 완료\n")
 
     # 2-1. 컬럼병 분위수(quantile) 계산
@@ -80,7 +81,9 @@ def resample_dataset(
     print("> 로컬에 저장 중...")
     resampled_df = pd.DataFrame(X_resampled, columns=X.columns)
     resampled_df["Label"] = y_resampled
-    resampled_df.to_csv(f"{DATASET_DIR_PATH}/resampled/{dataset_name}-smote.csv", index=False)
+    resampled_df.to_csv(
+        f"{DATASET_DIR_PATH}/resampled/{dataset_name}-smote.csv", index=False
+    )
     print("\t- 로컬에 저장 완료\n")
 
     print(
