@@ -66,16 +66,10 @@ dtypes = {
 }
 
 
-def read_dataset(dataset_name, chunksize=500000, usecols=None, engine="c"):
-    path = os.path.join(
-        DATASET_DIR_PATH + "/" + dataset_name + "/data", f"{dataset_name}.csv"
-    )
-
-    if usecols is None:
-        usecols = dtypes.keys()
-
+def read_dataset(dataset_path, chunksize=500000, usecols=None, engine="c"):
+    print(f"타겟 데이터셋: {dataset_path}")
     return dd.read_csv(
-        path,
+        dataset_path,
         blocksize=chunksize,
         dtype=dtypes,
         usecols=usecols,

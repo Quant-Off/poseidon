@@ -1,5 +1,6 @@
 import os
 import sys
+
 # 로컬 모듈 호출 (이 파일 기준: ../data 하위 모듈 호출)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 # 상위 디렉터리 경로를 sys.path에 추가 (../)
@@ -23,6 +24,8 @@ if __name__ == "__main__":
         dask_df = read_dataset(dataset)
 
         # Label 이외 모든 행 제거
-        dask_df = dask_df.drop(columns=[col for col in dask_df.columns if col != "Label"])
+        dask_df = dask_df.drop(
+            columns=[col for col in dask_df.columns if col != "Label"]
+        )
         print(dask_df["Label"].value_counts().compute())
         print("=" * 45)

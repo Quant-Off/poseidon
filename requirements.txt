@@ -8,6 +8,8 @@ dotenv==0.9.9
 equinox==0.13.2
 fonttools==4.60.1
 fsspec==2025.9.0
+imbalanced-learn==0.14.0
+imblearn==0.0
 importlib_metadata==8.7.0
 jax==0.4.38
 jaxlib==0.4.38
