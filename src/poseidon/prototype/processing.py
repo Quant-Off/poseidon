@@ -6,19 +6,19 @@ from poseidon.prototype import resampled_split, dataset_resampler
 
 # 환경 변수 로드
 load_dotenv(verbose=True)
-DATASET_RESAMPLED_PATH = os.getenv("DATASET_RESAMPLED_PATH")
-DATASET_CUSTOM_PATH = os.getenv("DATASET_CUSTOM_PATH")
-if not DATASET_RESAMPLED_PATH or not DATASET_CUSTOM_PATH:
+DATASETS_RESAMPLED_PATH = os.getenv("DATASETS_RESAMPLED_PATH")
+DATASETS_CUSTOM_PATH = os.getenv("DATASETS_CUSTOM_PATH")
+if not DATASETS_RESAMPLED_PATH or not DATASETS_CUSTOM_PATH:
     raise ValueError(
-        "DATASET_RESAMPLED_PATH 또는 DATASET_CUSTOM_PATH 환경 변수가 설정되지 않았습니다!"
+        "DATASETS_RESAMPLED_PATH 또는 DATASETS_CUSTOM_PATH 환경 변수가 설정되지 않았습니다!"
     )
 
 
 def oversampling(dataset_name, is_custom=False):
     if is_custom:
-        dataset_path = os.path.join(DATASET_CUSTOM_PATH, dataset_name)
+        dataset_path = os.path.join(DATASETS_CUSTOM_PATH, dataset_name)
     else:
-        dataset_path = os.path.join(DATASET_RESAMPLED_PATH, dataset_name)
+        dataset_path = os.path.join(DATASETS_RESAMPLED_PATH, dataset_name)
 
     return dataset_resampler.resample_dataset(dataset_path, output=False)
 
