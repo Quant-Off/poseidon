@@ -7,19 +7,21 @@ from poseidon.data.smote_knn import smote
 
 # 환경 변수 로드
 load_dotenv(verbose=True)
-DATASET_DIR_PATH = os.getenv("DATASET_DIR_PATH")
-if not DATASET_DIR_PATH:
-    raise ValueError("DATASET_DIR_PATH 환경 변수가 설정되지 않았습니다!")
+DATASET_RESAMPLED_PATH = os.getenv("DATASET_RESAMPLED_PATH")
+if not DATASET_RESAMPLED_PATH:
+    raise ValueError("DATASET_RESAMPLED_PATH 환경 변수가 설정되지 않았습니다!")
 
 
 def resample_dataset(
-    dataset_name, k=5, sampling_ratio=0.4831882086330935, random_state=42
+    dataset_path, k=5, sampling_ratio=0.4831882086330935, random_state=42, output=True, output_path=None
 ):
+    dataset_name = os.path.basename(os.path.dirname(dataset_path))
+
     print("=" * 45)
 
     # 1. 데이터 로드
     print(f"> {dataset_name} 데이터 청크 로드 중...")
-    dask_df = read_dataset(dataset_name, chunksize=500000)
+    dask_df = read_dataset(dataset_path, chunksize=500000)
     print("\t- 데이터셋 청크 로드 완료\n")
 
     # 2. 오류값 정정 (NaN, Inf 처리, 불필요 피처 제거)
@@ -78,26 +80,39 @@ def resample_dataset(
     print("\n")
 
     # 8. 로컬에 저장
-    print("> 로컬에 저장 중...")
     resampled_df = pd.DataFrame(X_resampled, columns=X.columns)
-    resampled_df["Label"] = y_resampled
-    resampled_df.to_csv(
-        f"{DATASET_DIR_PATH}/resampled/{dataset_name}-smote.csv", index=False
-    )
-    print("\t- 로컬에 저장 완료\n")
+    if output:
+        if output_path is None:
+            output_path = DATASET_RESAMPLED_PATH
+        print(f"> 로컬에 저장 중... (지정 경로: {output_path})")
+        resampled_df["Label"] = y_resampled
+        resampled_df.to_csv(
+            os.path.join(output_path, f"{dataset_name}-smote.csv"), index=False
+        )
+        print("\t- 로컬에 저장 완료\n")
 
-    print(
-        f"'{dataset_name}' 데이터셋에 대한 전처리 및 리샘플링 후 데이터셋 저장을 완료했습니다. {f'../{dataset_name}-smote.csv'}"
-    )
+        print(
+            f"'{dataset_name}' 데이터셋에 대한 전처리 및 SMOTE 리샘플링 후 데이터셋 저장을 완료했습니다. {f'../{dataset_name}-smote.csv'}"
+        )
+    else:
+        print(
+            f"'{dataset_name}' 데이터셋에 대한 전처리 및 SMOTE 리샘플링을 완료했습니다. 결과를 반환합니다."
+        )
+        return resampled_df
 
 
-# 각 데이터셋에 대해 실행
-datasets = [
-    # "TEST-DATASET",
-    "NF-UNSW-NB15-v3",
-    # "NF-BoT-IoT-v3",
-    # "NF-CICIDS2018-v3",
-    # "NF-ToN-IoT-v3",
-]
-for ds in datasets:
-    resample_dataset(ds)
+
+# 각 데이터셋에 대해 실행 (실제 데이터셋)
+# orig_datasets = [
+#     # "TEST-DATASET",
+#     # "NF-UNSW-NB15-v3",
+#     # "NF-BoT-IoT-v3",
+#     # "NF-CICIDS2018-v3",
+#     # "NF-ToN-IoT-v3",
+# ]
+
+# custom_datasets = [
+#     "500000s-NF-custom-dataset-1761928299",
+# ]
+# for ds in custom_datasets:
+#     resample_dataset(ds)
