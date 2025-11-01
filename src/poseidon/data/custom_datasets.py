@@ -44,9 +44,12 @@ def generate_netflow_dataset(n_samples=50000, random_state=42):
     )
 
     # 기본 타임스탬프 생성 (최근 1년 내)
+    # 비감소 순서를 보장하기 위해 정렬된 타임스탬프 생성
     main_pbar.set_description("타임스탬프 생성 중")
     base_time = int(datetime.now().timestamp() * 1000)
-    start_times = base_time - np.random.randint(0, 365 * 24 * 60 * 60 * 1000, n_samples)
+    # 먼저 랜덤한 간격을 생성한 후 누적 합으로 타임스탬프 생성 (비감소 순서 보장)
+    random_intervals = np.random.exponential(scale=3600000, size=n_samples).astype(np.int64)  # 평균 1시간 간격
+    start_times = base_time - np.cumsum(random_intervals[::-1])[::-1]  # 과거로 향하는 비감소 순서
     main_pbar.update(2)
 
     data = {}
@@ -97,17 +100,32 @@ def generate_netflow_dataset(n_samples=50000, random_state=42):
     # 플로우 지속 시간
     main_pbar.set_description("플로우 지속 시간 생성 중")
     flow_duration = np.random.exponential(scale=1000, size=n_samples).astype(np.int64)
+    flow_duration = np.maximum(flow_duration, 1)  # 최소 1ms 보장
     data["FLOW_DURATION_MILLISECONDS"] = flow_duration
-    data["DURATION_IN"] = (
-        flow_duration * np.random.uniform(0.3, 0.7, n_samples)
-    ).astype(np.int64)
-    data["DURATION_OUT"] = (
-        flow_duration * np.random.uniform(0.3, 0.7, n_samples)
-    ).astype(np.int64)
+    duration_in = (flow_duration * np.random.uniform(0.3, 0.7, n_samples)).astype(np.int64)
+    duration_out = (flow_duration * np.random.uniform(0.3, 0.7, n_samples)).astype(np.int64)
+    # DURATION_IN과 DURATION_OUT의 합이 FLOW_DURATION을 초과하지 않도록 보장
+    total_duration = duration_in + duration_out
+    scale_factor = np.where(total_duration > flow_duration, flow_duration / np.maximum(total_duration, 1), 1.0)
+    data["DURATION_IN"] = (duration_in * scale_factor).astype(np.int64)
+    data["DURATION_OUT"] = (duration_out * scale_factor).astype(np.int64)
+    # 최소값 보장
+    data["DURATION_IN"] = np.maximum(data["DURATION_IN"], 0).astype(np.int64)
+    data["DURATION_OUT"] = np.maximum(data["DURATION_OUT"], 0).astype(np.int64)
 
-    # 타임스탬프
+    # 타임스탬프 (비감소 순서 보장)
+    # FLOW_START_MILLISECONDS는 이미 비감소 순서로 생성됨
     data["FLOW_START_MILLISECONDS"] = start_times.astype(np.int64)
+    # FLOW_END_MILLISECONDS는 항상 FLOW_START_MILLISECONDS보다 크도록 보장
     data["FLOW_END_MILLISECONDS"] = (start_times + flow_duration).astype(np.int64)
+    
+    # 각 플로우 내에서 타임스탬프들이 비감소 순서를 가지도록 보장
+    # FLOW_END가 FLOW_START보다 작은 경우 방지
+    data["FLOW_END_MILLISECONDS"] = np.maximum(
+        data["FLOW_START_MILLISECONDS"] + 1,
+        data["FLOW_END_MILLISECONDS"]
+    ).astype(np.int64)
+    
     main_pbar.update(3)
 
     # TCP 플래그
@@ -235,17 +253,22 @@ def generate_netflow_dataset(n_samples=50000, random_state=42):
     main_pbar.update(3)
 
     # IAT (Inter-Arrival Time) - src to dst
+    # IAT 값들이 타임스탬프 계산에 사용되므로 논리적으로 일관성 있게 생성
     main_pbar.set_description("IAT 정보 생성 중 (Src->Dst)")
     iat_s2d_min = np.random.exponential(scale=10, size=n_samples).astype(np.int64)
+    iat_s2d_min = np.maximum(iat_s2d_min, 1)  # 최소 1ms 보장
     iat_s2d_max = iat_s2d_min + np.random.exponential(scale=100, size=n_samples).astype(
         np.int64
     )
+    iat_s2d_max = np.maximum(iat_s2d_max, iat_s2d_min + 1)  # max가 min보다 크도록 보장
     iat_s2d_avg = (
         (iat_s2d_min + iat_s2d_max) / 2 + np.random.normal(0, 5, n_samples)
     ).astype(np.int64)
+    # avg가 min과 max 사이에 있도록 보장
+    iat_s2d_avg = np.clip(iat_s2d_avg, iat_s2d_min, iat_s2d_max)
     data["SRC_TO_DST_IAT_MIN"] = iat_s2d_min
     data["SRC_TO_DST_IAT_MAX"] = iat_s2d_max
-    data["SRC_TO_DST_IAT_AVG"] = np.maximum(iat_s2d_avg, 1).astype(np.int64)
+    data["SRC_TO_DST_IAT_AVG"] = np.maximum(iat_s2d_avg, iat_s2d_min).astype(np.int64)
     data["SRC_TO_DST_IAT_STDDEV"] = np.random.exponential(
         scale=5, size=n_samples
     ).astype(np.int64)
@@ -254,15 +277,19 @@ def generate_netflow_dataset(n_samples=50000, random_state=42):
     # IAT - dst to src
     main_pbar.set_description("IAT 정보 생성 중 (Dst->Src)")
     iat_d2s_min = np.random.exponential(scale=10, size=n_samples).astype(np.int64)
+    iat_d2s_min = np.maximum(iat_d2s_min, 1)  # 최소 1ms 보장
     iat_d2s_max = iat_d2s_min + np.random.exponential(scale=100, size=n_samples).astype(
         np.int64
     )
+    iat_d2s_max = np.maximum(iat_d2s_max, iat_d2s_min + 1)  # max가 min보다 크도록 보장
     iat_d2s_avg = (
         (iat_d2s_min + iat_d2s_max) / 2 + np.random.normal(0, 5, n_samples)
     ).astype(np.int64)
+    # avg가 min과 max 사이에 있도록 보장
+    iat_d2s_avg = np.clip(iat_d2s_avg, iat_d2s_min, iat_d2s_max)
     data["DST_TO_SRC_IAT_MIN"] = iat_d2s_min
     data["DST_TO_SRC_IAT_MAX"] = iat_d2s_max
-    data["DST_TO_SRC_IAT_AVG"] = np.maximum(iat_d2s_avg, 1).astype(np.int64)
+    data["DST_TO_SRC_IAT_AVG"] = np.maximum(iat_d2s_avg, iat_d2s_min).astype(np.int64)
     data["DST_TO_SRC_IAT_STDDEV"] = np.random.exponential(
         scale=5, size=n_samples
     ).astype(np.int64)
