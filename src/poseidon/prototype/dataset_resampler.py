@@ -7,9 +7,9 @@ from poseidon.data.smote_knn import smote
 
 # 환경 변수 로드
 load_dotenv(verbose=True)
-DATASET_RESAMPLED_PATH = os.getenv("DATASET_RESAMPLED_PATH")
-if not DATASET_RESAMPLED_PATH:
-    raise ValueError("DATASET_RESAMPLED_PATH 환경 변수가 설정되지 않았습니다!")
+DATASETS_RESAMPLED_PATH = os.getenv("DATASETS_RESAMPLED_PATH")
+if not DATASETS_RESAMPLED_PATH:
+    raise ValueError("DATASETS_RESAMPLED_PATH 환경 변수가 설정되지 않았습니다!")
 
 
 def resample_dataset(
@@ -83,7 +83,7 @@ def resample_dataset(
     resampled_df = pd.DataFrame(X_resampled, columns=X.columns)
     if output:
         if output_path is None:
-            output_path = DATASET_RESAMPLED_PATH
+            output_path = DATASETS_RESAMPLED_PATH
         print(f"> 로컬에 저장 중... (지정 경로: {output_path})")
         resampled_df["Label"] = y_resampled
         resampled_df.to_csv(
