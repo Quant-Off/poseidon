@@ -81,11 +81,11 @@ def resample_dataset(
 
     # 8. 로컬에 저장
     resampled_df = pd.DataFrame(X_resampled, columns=X.columns)
+    resampled_df["Label"] = y_resampled
     if output:
         if output_path is None:
             output_path = DATASETS_RESAMPLED_PATH
         print(f"> 로컬에 저장 중... (지정 경로: {output_path})")
-        resampled_df["Label"] = y_resampled
         resampled_df.to_csv(
             os.path.join(output_path, f"{dataset_name}-smote.csv"), index=False
         )
