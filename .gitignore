@@ -6,14 +6,13 @@
 
 __pycache__/
 target/
+assets/
+build/
+datasets/
+docs/
+dist/
+venv/
 
-/assets
-/build
-/datasets
-/docs
-/dist
-/venv
-
-/rust-resampler/.env
-/rust-resampler/.DS_Store
-/rust-resampler/Cargo.lock
+rust-resampler/.env
+rust-resampler/.DS_Store
+rust-resampler/Cargo.lock
