@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
-from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from poseidon.util.shannon import entropy_sn
+from poseidon.util.timing_variance import timing_variance
 
 # 패킷 엔트로피 피처를 만들 때 필요한 섀넌 엔트로피가 적용되는 바이트 피처 목록
 bytes_features = [
@@ -24,6 +24,23 @@ bytes_features = [
     "NUM_PKTS_1024_TO_1514_BYTES",  # Packets whose IP size > 1024 and <= 1514.
 ]
 
+# 타이밍 변동  피처를 만들 때 필요한 피처 목록
+timing_variance_features = [
+    "FLOW_DURATION_MILLISECONDS",  # 전체 플로우 지속 시간 (기준 시간 스케일 제공)
+    "DURATION_IN",  # 클라이언트-서버 스트림 지속 시간 (인바운드)
+    "DURATION_OUT",  # 서버-클라이언트 스트림 지속 시간 (아웃바운드)
+    "SRC_TO_DST_IAT_MIN",  # 소스-대상 IAT 통계 (최소/최대/평균/표준편차)
+    "SRC_TO_DST_IAT_MAX",
+    "SRC_TO_DST_IAT_AVG",
+    "SRC_TO_DST_IAT_STDDEV",
+    "DST_TO_SRC_IAT_MIN",  # 대상-소스 IAT 통계
+    "DST_TO_SRC_IAT_MAX",
+    "DST_TO_SRC_IAT_AVG",
+    "DST_TO_SRC_IAT_STDDEV",
+    "FLOW_START_MILLISECONDS",  # 플로우 시작/종료 타임스탬프 (차이 계산 가능)
+    "FLOW_END_MILLISECONDS",
+]
+
 
 def split(resampled_df):
     """
@@ -41,9 +58,6 @@ def split(resampled_df):
     splited_y_val : pd.Series
     splited_y_test : pd.Series
     """
-    print("=" * 45)
-    print("> 데이터셋 분할(split) 중...")
-
     splited_X = resampled_df.drop("Label", axis=1)
     splited_y = resampled_df["Label"]
 
@@ -81,7 +95,6 @@ def scaling(split_X_train, split_X_val, split_X_test):
 
 
 def feature_analysis(scaled_X_train, scaled_X_val, scaled_X_test, feature_names):
-    print("피처 분석(DataFrame 변환) 작업 시작...")
     # 제외할 피처 목록
     exclude_features = ["IPV4_SRC_ADDR", "IPV4_DST_ADDR", "L4_SRC_PORT", "L4_DST_PORT"]
 
@@ -96,11 +109,13 @@ def feature_analysis(scaled_X_train, scaled_X_val, scaled_X_test, feature_names)
     # 각 피처별 히스토그램 출력
     for column_name in columns_list:
         print(
-            f"{column_name} 훈련 세트 히스토그램: {to_df_X_train[column_name].hist()}"
+            f"  {column_name} 훈련 세트 히스토그램: {to_df_X_train[column_name].hist()}"
         )
-        print(f"{column_name} 검증 세트 히스토그램: {to_df_X_val[column_name].hist()}")
         print(
-            f"{column_name} 테스트 세트 히스토그램: {to_df_X_test[column_name].hist()}"
+            f"  {column_name} 검증 세트 히스토그램: {to_df_X_val[column_name].hist()}"
+        )
+        print(
+            f"  {column_name} 테스트 세트 히스토그램: {to_df_X_test[column_name].hist()}"
         )
 
     return to_df_X_train, to_df_X_val, to_df_X_test
@@ -109,122 +124,101 @@ def feature_analysis(scaled_X_train, scaled_X_val, scaled_X_test, feature_names)
 def apply_entropy(row):
     byte_counts = np.array([row[feat] for feat in bytes_features])
     if np.sum(byte_counts) == 0:
-        return 0
+        return 0.0
     probs = byte_counts / np.sum(byte_counts)
-    return entropy_sn(probs)
+    entropy_value = entropy_sn(probs)
+    # JAX 배열이나 numpy 배열을 Python float로 변환
+    try:
+        # JAX 배열인 경우
+        if hasattr(entropy_value, "item"):
+            return float(entropy_value.item())
+        # numpy 배열인 경우
+        elif hasattr(entropy_value, "__len__") and len(entropy_value) == 1:
+            return float(entropy_value[0])
+        # 이미 스칼라인 경우
+        else:
+            return float(entropy_value)
+    except (TypeError, ValueError):
+        # 모든 변환이 실패하면 numpy를 통해 변환
+        return float(np.asarray(entropy_value).item())
 
 
-def main():
-    datasets = [
-        "NF-UNSW-NB15-v3",
-        "NF-BoT-IoT-v3",
-        "NF-CICIDS2018-v3",
-        "NF-ToN-IoT-v3",
-    ]
-    for dataset in datasets:
-        print("=" * 100)
-        print(f"{dataset} 데이터셋 로드 중...")
-
-        (
-            splited_X_train,
-            splited_X_val,
-            splited_X_test,
-            splited_y_train,
-            splited_y_val,
-            splited_y_test,
-        ) = split(dataset)
-        print(
-            f"훈련 세트: {splited_y_train.value_counts(normalize=True)}"
-        )  # 훈련 세트 클래스 비율
-        print(f"검증 세트: {splited_y_val.value_counts(normalize=True)}")  # 검증 세트
-        print(
-            f"테스트 세트: {splited_y_test.value_counts(normalize=True)}"
-        )  # 테스트 세트
-
-        print("피처 스케일링 작업 시작...")
-        scaled_X_train, scaled_X_val, scaled_X_test = scaling(
-            splited_X_train, splited_X_val, splited_X_test
-        )
-
-        # 정규화 결과 요약 정보 출력
-        print(f"훈련 세트 정규화 완료 - Shape: {scaled_X_train.shape}")
-        print(
-            f"  평균: {np.mean(scaled_X_train):.6f}, 표준편차: {np.std(scaled_X_train):.6f}"
-        )
-        print(
-            f"  최소값: {np.min(scaled_X_train):.6f}, 최대값: {np.max(scaled_X_train):.6f}"
-        )
-
-        print(f"검증 세트 정규화 완료 - Shape: {scaled_X_val.shape}")
-        print(
-            f"  평균: {np.mean(scaled_X_val):.6f}, 표준편차: {np.std(scaled_X_val):.6f}"
-        )
-        print(
-            f"  최소값: {np.min(scaled_X_val):.6f}, 최대값: {np.max(scaled_X_val):.6f}"
-        )
-
-        print(f"테스트 세트 정규화 완료 - Shape: {scaled_X_test.shape}")
-        print(
-            f"  평균: {np.mean(scaled_X_test):.6f}, 표준편차: {np.std(scaled_X_test):.6f}"
-        )
-        print(
-            f"  최소값: {np.min(scaled_X_test):.6f}, 최대값: {np.max(scaled_X_test):.6f}"
-        )
-
-        # 원본 DataFrame의 컬럼 이름을 feature_analysis 함수에 전달
-        to_df_X_train, to_df_X_val, to_df_X_test = feature_analysis(
-            scaled_X_train,
-            scaled_X_val,
-            scaled_X_test,
-            splited_X_train.columns.tolist(),
-        )
-
-        print("패킷 엔트로피 피처 적용 중...")
-        to_df_X_train["packet_entropy"] = [
-            apply_entropy(row)
-            for _, row in tqdm(
-                to_df_X_train.iterrows(),
-                total=len(to_df_X_train),
-                desc="훈련 세트 엔트로피 적용",
-            )
-        ]
-        to_df_X_val["packet_entropy"] = [
-            apply_entropy(row)
-            for _, row in tqdm(
-                to_df_X_val.iterrows(),
-                total=len(to_df_X_val),
-                desc="검증 세트 엔트로피 적용",
-            )
-        ]
-        to_df_X_test["packet_entropy"] = [
-            apply_entropy(row)
-            for _, row in tqdm(
-                to_df_X_test.iterrows(),
-                total=len(to_df_X_test),
-                desc="테스트 세트 엔트로피 적용",
-            )
-        ]
-        # 엔트로피 피처 통계
-        print("패킷 엔트로피 피처 통계 요약")
-        for name, df in [
-            ("훈련 세트", to_df_X_train),
-            ("검증 세트", to_df_X_val),
-            ("테스트 세트", to_df_X_test),
-        ]:
-            entropy_col = df["packet_entropy"]
-            print(f"\n[{name}]")
-            print(f"  데이터 수: {len(entropy_col):,}개")
-            print(f"  평균: {entropy_col.mean():.6f}")
-            print(f"  표준편차: {entropy_col.std():.6f}")
-            print(f"  최소값: {entropy_col.min():.6f}")
-            print(f"  25% 분위수: {entropy_col.quantile(0.25):.6f}")
-            print(f"  중간값: {entropy_col.median():.6f}")
-            print(f"  75% 분위수: {entropy_col.quantile(0.75):.6f}")
-            print(f"  최대값: {entropy_col.max():.6f}")
-            zero_count = (entropy_col == 0).sum()
-            print(
-                f"  0값 개수: {zero_count:,}개 ({zero_count/len(entropy_col)*100:.2f}%)"
-            )
-            print(f"  샘플 값 (처음 5개): {entropy_col.head().tolist()}")
-            print(f"  샘플 값 (마지막 5개): {entropy_col.tail().tolist()}")
-        print("\n\n\n")
+def apply_timing_variance(row):
+    """
+    각 행에서 타임스탬프 배열을 생성하여 timing_variance 함수에 전달합니다.
+    FLOW_START_MILLISECONDS와 FLOW_END_MILLISECONDS를 기준으로 
+    비감소 순서의 타임스탬프 배열을 생성합니다.
+    """
+    # 기본 타임스탬프 확인
+    if "FLOW_START_MILLISECONDS" not in row.index or "FLOW_END_MILLISECONDS" not in row.index:
+        return 0.0
+    
+    start_time = float(row["FLOW_START_MILLISECONDS"])
+    end_time = float(row["FLOW_END_MILLISECONDS"])
+    
+    # FLOW_END가 FLOW_START보다 작거나 같은 경우 처리
+    if end_time <= start_time:
+        end_time = start_time + 1.0
+    
+    # 플로우 지속 시간 기반으로 타임스탬프 시퀀스 생성
+    # DURATION_IN, DURATION_OUT가 있으면 이를 활용하여 더 정확한 타임스탬프 생성
+    duration_ms = end_time - start_time
+    
+    if duration_ms <= 0:
+        return 0.0
+    
+    # 패킷 수 추정 (IN_PKTS + OUT_PKTS 또는 기본값)
+    total_packets = 1
+    if "IN_PKTS" in row.index and "OUT_PKTS" in row.index:
+        total_packets = max(1, int(row["IN_PKTS"]) + int(row["OUT_PKTS"]))
+    
+    # 최소 2개, 최대 100개의 타임스탬프 생성 (너무 많으면 성능 저하)
+    num_timestamps = min(max(2, total_packets // 10), 100)
+    
+    # 비감소 순서의 타임스탬프 배열 생성
+    # 균등 간격 또는 지수 분포를 사용하여 실제 패킷 타이밍 시뮬레이션
+    if num_timestamps == 2:
+        # 최소 2개: 시작과 끝만
+        time_values = np.array([start_time, end_time])
+    else:
+        # 시작과 끝 사이에 중간 타임스탬프 생성
+        # IAT 통계가 있으면 이를 활용, 없으면 균등 분포 사용
+        if "SRC_TO_DST_IAT_AVG" in row.index and row["SRC_TO_DST_IAT_AVG"] > 0:
+            # IAT 평균값을 기반으로 간격 생성
+            avg_iat = float(row["SRC_TO_DST_IAT_AVG"])
+            intervals = np.random.exponential(scale=avg_iat, size=num_timestamps-1)
+        else:
+            # 균등 간격
+            intervals = np.full(num_timestamps - 1, duration_ms / (num_timestamps - 1))
+        
+        # 비감소 순서 보장
+        intervals = np.maximum(intervals, 0.1)  # 최소 0.1ms 간격
+        cumulative = np.cumsum(intervals)
+        # 전체 지속 시간에 맞게 스케일 조정
+        if cumulative[-1] > 0:
+            cumulative = cumulative * (duration_ms / cumulative[-1])
+        
+        # 시작 타임스탬프에 간격 누적
+        time_values = np.concatenate([[start_time], start_time + cumulative])
+        time_values = np.clip(time_values, start_time, end_time)
+        time_values[-1] = end_time  # 마지막은 정확히 end_time
+    
+    # 비감소 순서 확인 및 정렬
+    time_values = np.sort(time_values)
+    
+    if len(time_values) < 2:
+        return 0.0
+    
+    # timing_variance 함수 호출
+    variance_value = timing_variance(time_values)
+    
+    # JAX 배열이나 numpy 배열을 Python float로 변환
+    try:
+        if hasattr(variance_value, "item"):
+            return float(variance_value.item())
+        elif hasattr(variance_value, "__len__") and len(variance_value) == 1:
+            return float(variance_value[0])
+        else:
+            return float(variance_value)
+    except (TypeError, ValueError):
+        return float(np.asarray(variance_value).item())

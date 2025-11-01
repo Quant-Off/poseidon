@@ -23,6 +23,64 @@ def oversampling(dataset_name, is_custom=False):
     return dataset_resampler.resample_dataset(dataset_path, output=False)
 
 
+def cal_shannon_entropy(to_df_X_train, to_df_X_val, to_df_X_test):
+    to_df_X_train["packet_entropy"] = [
+        resampled_split.apply_entropy(row)
+        for _, row in tqdm(
+            to_df_X_train.iterrows(),
+            total=len(to_df_X_train),
+            desc="훈련 세트 엔트로피 적용",
+        )
+    ]
+    to_df_X_val["packet_entropy"] = [
+        resampled_split.apply_entropy(row)
+        for _, row in tqdm(
+            to_df_X_val.iterrows(),
+            total=len(to_df_X_val),
+            desc="검증 세트 엔트로피 적용",
+        )
+    ]
+    to_df_X_test["packet_entropy"] = [
+        resampled_split.apply_entropy(row)
+        for _, row in tqdm(
+            to_df_X_test.iterrows(),
+            total=len(to_df_X_test),
+            desc="테스트 세트 엔트로피 적용",
+        )
+    ]
+
+    return to_df_X_train, to_df_X_val, to_df_X_test
+
+
+def cal_timing_variance(to_df_X_train, to_df_X_val, to_df_X_test):
+    to_df_X_train["timing_variance"] = [
+        resampled_split.apply_timing_variance(row)
+        for _, row in tqdm(
+            to_df_X_train.iterrows(),
+            total=len(to_df_X_train),
+            desc="훈련 세트 타이밍 변동 적용",
+        )
+    ]
+    to_df_X_val["timing_variance"] = [
+        resampled_split.apply_timing_variance(row)
+        for _, row in tqdm(
+            to_df_X_val.iterrows(),
+            total=len(to_df_X_val),
+            desc="검증 세트 타이밍 변동 적용",
+        )
+    ]
+    to_df_X_test["timing_variance"] = [
+        resampled_split.apply_timing_variance(row)
+        for _, row in tqdm(
+            to_df_X_test.iterrows(),
+            total=len(to_df_X_test),
+            desc="테스트 세트 타이밍 변동 적용",
+        )
+    ]
+
+    return to_df_X_train, to_df_X_val, to_df_X_test
+
+
 def all_process(dataset, is_custom=False):
     print("=" * 100)
     print(f"> {dataset} SMOTE 오버샘플링 적용 중...")
@@ -78,34 +136,50 @@ def all_process(dataset, is_custom=False):
     )
 
     print(f"> {dataset} 데이터셋 엔트로피 적용 중...")
-    to_df_X_train["packet_entropy"] = [
-        resampled_split.apply_entropy(row)
-        for _, row in tqdm(
-            to_df_X_train.iterrows(),
-            total=len(to_df_X_train),
-            desc="훈련 세트 엔트로피 적용",
-        )
-    ]
-    to_df_X_val["packet_entropy"] = [
-        resampled_split.apply_entropy(row)
-        for _, row in tqdm(
-            to_df_X_val.iterrows(),
-            total=len(to_df_X_val),
-            desc="검증 세트 엔트로피 적용",
-        )
-    ]
-    to_df_X_test["packet_entropy"] = [
-        resampled_split.apply_entropy(row)
-        for _, row in tqdm(
-            to_df_X_test.iterrows(),
-            total=len(to_df_X_test),
-            desc="테스트 세트 엔트로피 적용",
-        )
-    ]
+    to_df_X_train, to_df_X_val, to_df_X_test = cal_shannon_entropy(
+        to_df_X_train, to_df_X_val, to_df_X_test
+    )
+    print(f"> {dataset} 리샘플링 및 엔트로피 피처 적용 완료")
+    for name, df in [
+        ("훈련 세트", to_df_X_train),
+        ("검증 세트", to_df_X_val),
+        ("테스트 세트", to_df_X_test),
+    ]:
+        entropy_col = df["packet_entropy"]
+        print(f"  섀넌 엔트로피 피처 통계 요약: '{name}'")
+        print(f"\t데이터 수: {len(entropy_col):,}개")
+        print(f"\t평균: {entropy_col.mean():.12f}")
+        print(f"\t최소값: {entropy_col.min():.12f}")
+        print(f"\t중간값: {entropy_col.median():.12f}")
+        print(f"\t최대값: {entropy_col.max():.12f}")
+        zero_count = (entropy_col == 0).sum()
+        print(f"\t0값 개수: {zero_count:,}개 ({zero_count/len(entropy_col)*100:.2f}%)")
+        print(f"\t샘플 값 (처음 5개): {entropy_col.head().tolist()}")
+        print(f"\t샘플 값 (마지막 5개): {entropy_col.tail().tolist()}")
 
-    # TODO: 피처 엔지니어링은 엔트로피 뿐 아니라 타이밍 변동, 양자 시뮬레이션 피처가 추가되어야 함.
-
-    print(f"> {dataset} 리샘플링 및 피처 엔지니어링 적용 완료!\n\n\n")
+    print(f"> {dataset} 타이밍 변동 계산 중...")
+    to_df_X_train, to_df_X_val, to_df_X_test = cal_timing_variance(
+        to_df_X_train, to_df_X_val, to_df_X_test
+    )
+    print(f"> {dataset} 리샘플링 및 타이밍 변동 피처 적용 완료")
+    for name, df in [
+        ("훈련 세트", to_df_X_train),
+        ("검증 세트", to_df_X_val),
+        ("테스트 세트", to_df_X_test),
+    ]:
+        timing_variance_col = df["timing_variance"]
+        print(f"  타이밍 변동 피처 통계 요약: '{name}'")
+        print(f"\t데이터 수: {len(timing_variance_col):,}개")
+        print(f"\t평균: {timing_variance_col.mean():.12f}")
+        print(f"\t최소값: {timing_variance_col.min():.12f}")
+        print(f"\t중간값: {timing_variance_col.median():.12f}")
+        print(f"\t최대값: {timing_variance_col.max():.12f}")
+        zero_count = (timing_variance_col == 0).sum()
+        print(
+            f"\t0값 개수: {zero_count:,}개 ({zero_count/len(timing_variance_col)*100:.2f}%)"
+        )
+        print(f"\t샘플 값 (처음 5개): {timing_variance_col.head().tolist()}")
+        print(f"\t샘플 값 (마지막 5개): {timing_variance_col.tail().tolist()}")
 
 
 if __name__ == "__main__":
