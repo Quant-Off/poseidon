@@ -3,7 +3,7 @@ import jax
 import logging  # 경고 로깅을 위한 모듈 추가
 
 
-def timing_variance(timestamps, normalize=False):
+def timing_variance(timestamps, normalize=False, debug=False):
     r"""
     패킷 도착 시간 배열의 타이밍 변동(표준편차)을 계산합니다.
 
@@ -72,8 +72,16 @@ def timing_variance(timestamps, normalize=False):
         raise ValueError("타임스탬프는 비감소 순서여야 합니다!")
 
     # 통계적 편향 경고 (샘플 크기 확인)
-    if len(diffs) < 30:
-        logging.warning(
+    # 단일 플로우에서는 작은 샘플 크기가 정상적인 상황이므로,
+    # 매우 작은 경우(m < 5)만 DEBUG 레벨로 기록
+    if len(diffs) < 5 and debug:
+        logging.debug(
+            "샘플 크기 m < 5: 표본 분산 편향 가능성이 존재합니다. 더 많은 데이터를 권장합니다! (할당값: %d)",
+            len(diffs),
+        )
+    elif len(diffs) < 30 and debug:
+        # 5 <= m < 30인 경우에만 경고 (개별 플로우에서는 일반적인 상황)
+        logging.debug(
             "샘플 크기 m < 30: 표본 분산 편향 가능성이 존재합니다. 더 많은 데이터를 권장합니다! (할당값: %d)",
             len(diffs),
         )
