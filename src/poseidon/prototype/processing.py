@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 from dotenv import load_dotenv
 from poseidon.prototype import resampled_split, dataset_resampler
@@ -81,10 +82,38 @@ def cal_timing_variance(to_df_X_train, to_df_X_val, to_df_X_test):
     return to_df_X_train, to_df_X_val, to_df_X_test
 
 
-def all_process(dataset, is_custom=False):
+def load_pandas_dataframe(dataset_path):
+    # 청크 단위로 읽으면서 진행률 표시
+    chunk_size = 100000  # 청크 크기 (행 수)
+    chunks = []
+    
+    # 전체 행 수 추정 (진행률 계산용)
+    with open(dataset_path, 'r', encoding='utf-8') as f:
+        # 첫 번째 줄 (헤더) 건너뛰기
+        f.readline()
+        # 나머지 줄 수 추정
+        estimated_rows = sum(1 for _ in f)
+    
+    # tqdm 진행바를 사용하여 청크 단위로 CSV 파일 읽기
+    with tqdm(total=estimated_rows, desc="CSV 파일 로드", unit="행", unit_scale=True) as pbar:
+        for chunk in pd.read_csv(dataset_path, chunksize=chunk_size, low_memory=False):
+            chunks.append(chunk)
+            pbar.update(len(chunk))
+    
+    # 모든 청크 결합 및 반환
+    return pd.concat(chunks, ignore_index=True)
+
+
+def all_process(dataset, is_custom=False, is_smote=False):
     print("=" * 100)
-    print(f"> {dataset} SMOTE 오버샘플링 적용 중...")
-    resampled_df = oversampling(dataset, is_custom=is_custom)
+    if is_smote:
+        print(f"> {dataset} SMOTE 오버샘플링 적용 중...")
+        resampled_df = oversampling(dataset, is_custom=is_custom)
+    else:
+        print(f"> {dataset} 데이터셋 로드 중 (pandas)...")
+        dataset_path = os.path.join(DATASETS_RESAMPLED_PATH, f"{dataset}")
+        resampled_df = load_pandas_dataframe(dataset_path)
+        print(f"  로드 완료: {len(resampled_df):,}행, {len(resampled_df.columns)}열")
 
     print(f"> {dataset} 데이터셋 분할 중...")
     (
@@ -183,7 +212,8 @@ def all_process(dataset, is_custom=False):
 
 
 if __name__ == "__main__":
-    is_test = True
+    is_test = False
+    is_smote = True
     if is_test:
         all_process("500000s-NF-custom-dataset-1761928299.csv", is_custom=is_test)
     else:
@@ -194,4 +224,7 @@ if __name__ == "__main__":
             "NF-UNSW-NB15-v3",
         ]
         for d in real_datasets:
-            all_process(f"{d}.csv")
+            if is_smote:
+                all_process(f"{d}-smote.csv")
+            else:
+                all_process(f"{d}.csv")
