@@ -46,11 +46,10 @@ Q. T. Felix
 MIT License
 """
 
+import jax.numpy as jnp
 import numpy as np
 import qutip_jax
-import jax.numpy as jnp
 from jax import jit
-
 
 qutip_jax.set_as_default()
 

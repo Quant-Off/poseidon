@@ -1,7 +1,9 @@
 import os
+
 import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
+
 from poseidon.data.dataset import read_dataset, clip_partition, shuffle_and_split
 from poseidon.data.smote_knn import smote
 
@@ -13,7 +15,7 @@ if not DATASETS_RESAMPLED_PATH:
 
 
 def resample_dataset(
-    dataset_path, k=5, sampling_ratio=0.4831882086330935, random_state=42, output=True, output_path=None
+        dataset_path, k=5, sampling_ratio=0.4831882086330935, random_state=42, output=True, output_path=None
 ):
     dataset_name = os.path.basename(os.path.dirname(dataset_path))
 
@@ -94,25 +96,9 @@ def resample_dataset(
         print(
             f"'{dataset_name}' 데이터셋에 대한 전처리 및 SMOTE 리샘플링 후 데이터셋 저장을 완료했습니다. {f'../{dataset_name}-smote.csv'}"
         )
+        return None
     else:
         print(
             f"'{dataset_name}' 데이터셋에 대한 전처리 및 SMOTE 리샘플링을 완료했습니다. 결과를 반환합니다."
         )
         return resampled_df
-
-
-
-# 각 데이터셋에 대해 실행 (실제 데이터셋)
-# orig_datasets = [
-#     # "TEST-DATASET",
-#     # "NF-UNSW-NB15-v3",
-#     # "NF-BoT-IoT-v3",
-#     # "NF-CICIDS2018-v3",
-#     # "NF-ToN-IoT-v3",
-# ]
-
-# custom_datasets = [
-#     "500000s-NF-custom-dataset-1761928299",
-# ]
-# for ds in custom_datasets:
-#     resample_dataset(ds)
