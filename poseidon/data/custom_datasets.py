@@ -401,7 +401,7 @@ def generate_netflow_dataset(n_samples=50000, random_state=42):
 
 
 if __name__ == "__main__":
-    sel_n_samples = 25000
+    sel_n_samples = 10000
     output_path = os.path.join(
         DATASETS_CUSTOM_PATH,
         f"{sel_n_samples}s-NF-custom-dataset-{int(time.time())}.csv",

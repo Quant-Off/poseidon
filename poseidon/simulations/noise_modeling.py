@@ -189,7 +189,6 @@ class BitFlipSimulation:
             pur_value = rho_noisy.purity()
             self.result.purities.append(pur_value)
             # 폰 노이만 엔트로피 계산
-            print(rho_noisy)
             rho_noisy_valid, trace_val = validate_rho(rho_noisy)
             ent_value = entropy_vn_jitted(rho_noisy_valid, trace_val)
             self.result.entropies.append(ent_value)

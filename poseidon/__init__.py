@@ -30,6 +30,8 @@ from poseidon.util.shannon import entropy_sn
 from poseidon.util.timing_variance import timing_variance
 from poseidon.util.von_neumann import validate_rho
 
+from poseidon.errors import errors
+
 from poseidon import process
 
 data = [
@@ -74,4 +76,4 @@ tests = []
 
 util = ["entropy_sn", "validate_rho", "timing_variance", "ip_to_int"]
 
-__all__ = data + log + processpiece + prototype + simulations + tests + util + process.__all__
+__all__ = data + errors.__all__ + log + processpiece + prototype + simulations + tests + util + process.__all__

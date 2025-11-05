@@ -1,3 +1,6 @@
+import contextlib
+import io
+
 import dask.array as da
 import numpy as np
 import qutip as qt
@@ -189,11 +192,15 @@ def apply_quantum_noise_simulation(row):
     p = max(p, 0.001)
 
     # 3. Bit-Flip 시뮬레이션 (생성된 초기 상태 사용)
-    bit_flip = BitFlipSimulation(initial_state=rho0, p_values=[p]).simulate()
+    # QuTiP의 출력을 억제하기 위해 stdout을 임시로 리다이렉트
+    with contextlib.redirect_stdout(io.StringIO()):
+        bit_flip = BitFlipSimulation(initial_state=rho0, p_values=[p]).simulate()
     entropy_bit = bit_flip["entropies"][0]
 
     # 4. Phase-Flip 시뮬레이션 (생성된 초기 상태 사용)
-    phase_flip = PhaseFlipSimulation(initial_state=rho0, p_values=[p]).simulate()
+    # QuTiP의 출력을 억제하기 위해 stdout을 임시로 리다이렉트
+    with contextlib.redirect_stdout(io.StringIO()):
+        phase_flip = PhaseFlipSimulation(initial_state=rho0, p_values=[p]).simulate()
     entropy_phase = phase_flip["entropies"][0]
 
     # 5. 평균 엔트로피 계산
