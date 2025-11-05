@@ -1,13 +1,5 @@
-from poseidon.prototype.dataset_resampler import resample_dataset
-from poseidon.prototype.feature_engineering import split, scaling, feature_analysis, apply_entropy, apply_timing_variance
-from poseidon.prototype.processing import all_process
+import poseidon.prototype.dataset_resampler as resample_dataset
+import poseidon.prototype.feature_engineering as engineering
+import poseidon.prototype.processing as process
 
-__all__ = [
-    'resample_dataset',
-    'split',
-    'scaling',
-    'feature_analysis',
-    'apply_entropy',
-    'apply_timing_variance',
-    'all_process',
-]
+__all__ = resample_dataset.__all__ + engineering.__all__ + process.__all__

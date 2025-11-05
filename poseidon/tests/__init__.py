@@ -1,4 +1,6 @@
-from poseidon.tests.noise_simulation_test import bit_flip, phase_flip
+# from poseidon.tests.noise_simulation_test import bit_flip, phase_flip
+
+# from poseidon.tests.spec_process_test import *
 
 # from .shannon_entropy_test import *
 # from .von_neumann_entropy_test import *
@@ -10,4 +12,4 @@ from poseidon.tests.noise_simulation_test import bit_flip, phase_flip
 # from .dataset_smote_test import *
 # from .datasets_info import *
 
-__all__ = ['bit_flip', 'phase_flip']
+# __all__ = ['spec_test', 'bit_flip', 'phase_flip']

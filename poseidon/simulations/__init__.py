@@ -1,3 +1,3 @@
-from poseidon.simulations.noise_modeling import BitFlipSimulation, PhaseFlipSimulation, SimulateResult
+import poseidon.simulations.noise_modeling as noise_models
 
-__all__ = ["BitFlipSimulation", "PhaseFlipSimulation"]
+__all__ = noise_models.__all__
