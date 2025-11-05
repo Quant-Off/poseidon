@@ -1,5 +1,7 @@
+import os
 import numpy as np
 import dask.dataframe as dd
+from dotenv import load_dotenv
 from poseidon.data.dataset_type import DatasetType
 from poseidon.processpiece.oversampling import Oversampling
 from poseidon.data.poseidon_dtypes import dtypes
@@ -10,11 +12,14 @@ from poseidon.processpiece.feature_calculate import (
     apply_timing_variance,
     apply_quantum_noise_simulation,
 )
+from poseidon.processpiece.load_dask_dataframe import load_large_dataset
 from poseidon.log.poseidon_log import PoseidonLogger
 
 from tqdm import tqdm
 
 logger = PoseidonLogger().get_logger()
+load_dotenv(verbose=True)
+DATASETS_RESAMPLED_PATH = os.getenv("DATASETS_RESAMPLED_PATH")
 
 
 def process():
@@ -24,9 +29,17 @@ def process():
     save_val = False
     save_test = False
     logger.info("데이터셋 처리 시작")
-    resampled_df, ovs = process_oversampling(
-        dataset=DatasetType.NF_UNSW_NB15_V3, req_smote=req_smote
-    )
+    if req_smote:
+        resampled_df, ovs = process_oversampling(
+            dataset=DatasetType.NF_UNSW_NB15_V3, req_smote=True
+        )
+    else:
+        resampled_df = load_large_dataset(
+            file_path=f"{DATASETS_RESAMPLED_PATH}/NF-UNSW-NB15-v3-smote.csv",
+            blocksize="256MB",
+            dtypes=dtypes,
+            npartitions=20,
+        )
     logger.info("  - 데이터셋 처리 완료")
 
     logger.info("데이터셋 훈련, 검증, 테스트 분할 시작")
@@ -37,7 +50,9 @@ def process():
         _,
         _,
         _,
-    ) = DatasetSplit(resampled_df).split(npartitions=20)
+    ) = DatasetSplit(
+        resampled_df
+    ).split(npartitions=20)
     logger.info("  - 데이터셋 훈련, 검증, 테스트 분할 완료")
 
     logger.info("데이터셋 스케일링 시작")
@@ -287,4 +302,4 @@ def cal_quantum_noise_simulation(to_df_X_train, to_df_X_val, to_df_X_test):
 if __name__ == "__main__":
     process()
 
-__all__ = [ 'process' ]
+__all__ = ["process"]
