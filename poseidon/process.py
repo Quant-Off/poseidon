@@ -284,4 +284,7 @@ def cal_quantum_noise_simulation(to_df_X_train, to_df_X_val, to_df_X_test):
     return to_df_X_train, to_df_X_val, to_df_X_test
 
 
+if __name__ == "__main__":
+    process()
+
 __all__ = [ 'process' ]
