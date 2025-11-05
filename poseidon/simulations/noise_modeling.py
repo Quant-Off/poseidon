@@ -407,3 +407,5 @@ class PhaseFlipSimulation:
 
         plt.tight_layout()
         plt.show()
+
+__all__ = ['BitFlipSimulation', 'PhaseFlipSimulation']

@@ -284,3 +284,8 @@ def smote_with_custom_knn(
     y_resampled = np.hstack([y, np.array(synthetic_labels)])
 
     return X_resampled, y_resampled
+
+__all__ = [
+    'compute_knn',
+    'smote',
+]

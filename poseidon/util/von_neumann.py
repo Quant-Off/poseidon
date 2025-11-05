@@ -138,7 +138,7 @@ def entropy_vn_jitted(rho, trace_val, base=2, normalize=False, eps=1e-15):
     def normalize_rho(rho, trace_val):
         return lax.cond(
             jnp.isclose(trace_val, 0.0),
-            lambda _: jnp.zeros_like(rho), # 더미 반환 (오류 방지)
+            lambda _: jnp.zeros_like(rho),  # 더미 반환 (오류 방지)
             lambda _: rho / trace_val,
             None,
         )
@@ -190,3 +190,6 @@ def entropy_vn_jitted(rho, trace_val, base=2, normalize=False, eps=1e-15):
     log_result = jnp.where(non_zero_mask, log_result, 0.0)
 
     return -jnp.sum(eigenvalues * log_result)
+
+
+__all__ = ['validate_rho']

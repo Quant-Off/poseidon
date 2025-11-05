@@ -1,6 +1,7 @@
-import jax.numpy as jnp
-import jax
 import logging  # 경고 로깅을 위한 모듈 추가
+
+import jax
+import jax.numpy as jnp
 
 
 def timing_variance(timestamps, normalize=False, debug=False):
@@ -101,3 +102,6 @@ def timing_variance(timestamps, normalize=False, debug=False):
         mean = jnp.mean(diffs)
         return std / mean if mean != 0 else 0.0
     return std
+
+
+__all__ = ['timing_variance']

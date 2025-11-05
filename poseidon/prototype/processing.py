@@ -1,8 +1,11 @@
 import os
+
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
+import dask.dataframe as dd
 from dotenv import load_dotenv
+from tqdm import tqdm
+
 from poseidon.prototype import feature_engineering, dataset_resampler
 
 # 환경 변수 로드
@@ -25,59 +28,81 @@ def oversampling(dataset_name, is_custom=False):
 
 
 def cal_shannon_entropy(to_df_X_train, to_df_X_val, to_df_X_test):
-    to_df_X_train["packet_entropy"] = [
-        feature_engineering.apply_entropy(row)
-        for _, row in tqdm(
-            to_df_X_train.iterrows(),
-            total=len(to_df_X_train),
-            desc="훈련 세트 엔트로피 적용",
-        )
-    ]
-    to_df_X_val["packet_entropy"] = [
-        feature_engineering.apply_entropy(row)
-        for _, row in tqdm(
-            to_df_X_val.iterrows(),
-            total=len(to_df_X_val),
-            desc="검증 세트 엔트로피 적용",
-        )
-    ]
-    to_df_X_test["packet_entropy"] = [
-        feature_engineering.apply_entropy(row)
-        for _, row in tqdm(
-            to_df_X_test.iterrows(),
-            total=len(to_df_X_test),
-            desc="테스트 세트 엔트로피 적용",
-        )
-    ]
+    def apply_entropy_dask(row):
+        return feature_engineering.apply_entropy(row)
+
+    to_df_X_train = dd.from_pandas(to_df_X_train, npartitions=20)
+    to_df_X_train["packet_entropy"] = to_df_X_train.apply(
+        apply_entropy_dask,
+        axis=1,
+        meta=("packet_entropy", "f8"),
+    )
+    to_df_X_train = to_df_X_train.compute()
+    to_df_X_train['packet_entropy'] = to_df_X_train['packet_entropy'].apply(
+        lambda x: float(x.item()) if hasattr(x, 'item') else float(x)
+    )
+
+    to_df_X_val = dd.from_pandas(to_df_X_val, npartitions=20)
+    to_df_X_val["packet_entropy"] = to_df_X_val.apply(
+        apply_entropy_dask,
+        axis=1,
+        meta=("packet_entropy", "f8"),
+    )
+    to_df_X_val = to_df_X_val.compute()
+    to_df_X_val['packet_entropy'] = to_df_X_val['packet_entropy'].apply(
+        lambda x: float(x.item()) if hasattr(x, 'item') else float(x)
+    )
+
+    to_df_X_test = dd.from_pandas(to_df_X_test, npartitions=20)
+    to_df_X_test["packet_entropy"] = to_df_X_test.apply(
+        apply_entropy_dask,
+        axis=1,
+        meta=("packet_entropy", "f8"),
+    )
+    to_df_X_test = to_df_X_test.compute()
+    to_df_X_test['packet_entropy'] = to_df_X_test['packet_entropy'].apply(
+        lambda x: float(x.item()) if hasattr(x, 'item') else float(x)
+    )
 
     return to_df_X_train, to_df_X_val, to_df_X_test
 
 
 def cal_timing_variance(to_df_X_train, to_df_X_val, to_df_X_test):
-    to_df_X_train["timing_variance"] = [
-        feature_engineering.apply_timing_variance(row)
-        for _, row in tqdm(
-            to_df_X_train.iterrows(),
-            total=len(to_df_X_train),
-            desc="훈련 세트 타이밍 변동 적용",
-        )
-    ]
-    to_df_X_val["timing_variance"] = [
-        feature_engineering.apply_timing_variance(row)
-        for _, row in tqdm(
-            to_df_X_val.iterrows(),
-            total=len(to_df_X_val),
-            desc="검증 세트 타이밍 변동 적용",
-        )
-    ]
-    to_df_X_test["timing_variance"] = [
-        feature_engineering.apply_timing_variance(row)
-        for _, row in tqdm(
-            to_df_X_test.iterrows(),
-            total=len(to_df_X_test),
-            desc="테스트 세트 타이밍 변동 적용",
-        )
-    ]
+    def apply_timing_variance_dask(row):
+        return feature_engineering.apply_timing_variance(row)
+
+    to_df_X_train = dd.from_pandas(to_df_X_train, npartitions=20)
+    to_df_X_train["timing_variance"] = to_df_X_train.apply(
+        apply_timing_variance_dask,
+        axis=1,
+        meta=("timing_variance", "f8"),
+    )
+    to_df_X_train = to_df_X_train.compute()
+    to_df_X_train['timing_variance'] = to_df_X_train['timing_variance'].apply(
+        lambda x: float(x.item()) if hasattr(x, 'item') else float(x)
+    )
+
+    to_df_X_val = dd.from_pandas(to_df_X_val, npartitions=20)
+    to_df_X_val["timing_variance"] = to_df_X_val.apply(
+        apply_timing_variance_dask,
+        axis=1,
+        meta=("timing_variance", "f8"),
+    )
+    to_df_X_val = to_df_X_val.compute()
+    to_df_X_val['timing_variance'] = to_df_X_val['timing_variance'].apply(
+        lambda x: float(x.item()) if hasattr(x, 'item') else float(x)
+    )
+
+    to_df_X_test = dd.from_pandas(to_df_X_test, npartitions=20)
+    to_df_X_test["timing_variance"] = to_df_X_test.apply(
+        apply_timing_variance_dask,
+        axis=1,
+        meta=("timing_variance", "f8"),
+    )
+    to_df_X_test = to_df_X_test.compute()
+    to_df_X_test['timing_variance'] = to_df_X_test['timing_variance'].apply(
+        lambda x: float(x.item()) if hasattr(x, 'item') else float(x)
+    )
 
     return to_df_X_train, to_df_X_val, to_df_X_test
 
@@ -104,30 +129,42 @@ def cal_quantum_noise_simulation(to_df_X_train, to_df_X_val, to_df_X_test):
     to_df_X_test : pd.DataFrame
         양자 노이즈 시뮬레이션 피처가 추가된 테스트 세트
     """
-    to_df_X_train["quantum_noise_simulation"] = [
-        feature_engineering.apply_quantum_noise_simulation(row)
-        for _, row in tqdm(
-            to_df_X_train.iterrows(),
-            total=len(to_df_X_train),
-            desc="훈련 세트 양자 노이즈 시뮬레이션 적용",
-        )
-    ]
-    to_df_X_val["quantum_noise_simulation"] = [
-        feature_engineering.apply_quantum_noise_simulation(row)
-        for _, row in tqdm(
-            to_df_X_val.iterrows(),
-            total=len(to_df_X_val),
-            desc="검증 세트 양자 노이즈 시뮬레이션 적용",
-        )
-    ]
-    to_df_X_test["quantum_noise_simulation"] = [
-        feature_engineering.apply_quantum_noise_simulation(row)
-        for _, row in tqdm(
-            to_df_X_test.iterrows(),
-            total=len(to_df_X_test),
-            desc="테스트 세트 양자 노이즈 시뮬레이션 적용",
-        )
-    ]
+
+    def apply_quantum_noise_simulation_dask(row):
+        return feature_engineering.apply_quantum_noise_simulation(row)
+
+    to_df_X_train = dd.from_pandas(to_df_X_train, npartitions=20)
+    to_df_X_train["quantum_noise_simulation"] = to_df_X_train.apply(
+        apply_quantum_noise_simulation_dask,
+        axis=1,
+        meta=("quantum_noise_simulation", "f8"),
+    )
+    to_df_X_train = to_df_X_train.compute()
+    to_df_X_train['quantum_noise_simulation'] = to_df_X_train['quantum_noise_simulation'].apply(
+        lambda x: float(x.item()) if hasattr(x, 'item') else float(x)
+    )
+
+    to_df_X_val = dd.from_pandas(to_df_X_val, npartitions=20)
+    to_df_X_val["quantum_noise_simulation"] = to_df_X_val.apply(
+        apply_quantum_noise_simulation_dask,
+        axis=1,
+        meta=("quantum_noise_simulation", "f8"),
+    )
+    to_df_X_val = to_df_X_val.compute()
+    to_df_X_val['quantum_noise_simulation'] = to_df_X_val['quantum_noise_simulation'].apply(
+        lambda x: float(x.item()) if hasattr(x, 'item') else float(x)
+    )
+
+    to_df_X_test = dd.from_pandas(to_df_X_test, npartitions=20)
+    to_df_X_test["quantum_noise_simulation"] = to_df_X_test.apply(
+        apply_quantum_noise_simulation_dask,
+        axis=1,
+        meta=("quantum_noise_simulation", "f8"),
+    )
+    to_df_X_test = to_df_X_test.compute()
+    to_df_X_test['quantum_noise_simulation'] = to_df_X_test['quantum_noise_simulation'].apply(
+        lambda x: float(x.item()) if hasattr(x, 'item') else float(x)
+    )
 
     return to_df_X_train, to_df_X_val, to_df_X_test
 
@@ -157,6 +194,13 @@ def load_pandas_dataframe(dataset_path):
 
 
 def all_process(dataset, is_custom=False, is_smote=False, final_output=True):
+    """
+    :param dataset: 타겟 데이터셋
+    :param is_custom: 커스텀 데이터셋이면 True, 그렇지 않으면 False
+    :param is_smote: SMOTE 오버샘플링이 필요한 경우 True, 그렇지 않으면 False
+    :param final_output: 아웃풋이 필요한 경우 True, 그렇지 않으면 False
+    :return:
+    """
     print("=" * 100)
     if is_smote:
         print(f"> {dataset} SMOTE 오버샘플링 적용 중...")
@@ -234,7 +278,9 @@ def all_process(dataset, is_custom=False, is_smote=False, final_output=True):
         print(f"\t중간값: {entropy_col.median():.12f}")
         print(f"\t최대값: {entropy_col.max():.12f}")
         zero_count = (entropy_col == 0).sum()
-        print(f"\t0값 개수: {zero_count:,}개 ({zero_count/len(entropy_col)*100:.2f}%)")
+        print(
+            f"\t0값 개수: {zero_count:,}개 ({zero_count / len(entropy_col) * 100:.2f}%)"
+        )
         print(f"\t샘플 값 (처음 5개): {entropy_col.head().tolist()}")
         print(f"\t샘플 값 (마지막 5개): {entropy_col.tail().tolist()}")
 
@@ -257,7 +303,7 @@ def all_process(dataset, is_custom=False, is_smote=False, final_output=True):
         print(f"\t최대값: {timing_variance_col.max():.12f}")
         zero_count = (timing_variance_col == 0).sum()
         print(
-            f"\t0값 개수: {zero_count:,}개 ({zero_count/len(timing_variance_col)*100:.2f}%)"
+            f"\t0값 개수: {zero_count:,}개 ({zero_count / len(timing_variance_col) * 100:.2f}%)"
         )
         print(f"\t샘플 값 (처음 5개): {timing_variance_col.head().tolist()}")
         print(f"\t샘플 값 (마지막 5개): {timing_variance_col.tail().tolist()}")
@@ -281,14 +327,16 @@ def all_process(dataset, is_custom=False, is_smote=False, final_output=True):
         print(f"\t최대값: {quantum_noise_col.max():.12f}")
         zero_count = (quantum_noise_col == 0).sum()
         print(
-            f"\t0값 개수: {zero_count:,}개 ({zero_count/len(quantum_noise_col)*100:.2f}%)"
+            f"\t0값 개수: {zero_count:,}개 ({zero_count / len(quantum_noise_col) * 100:.2f}%)"
         )
         print(f"\t샘플 값 (처음 5개): {quantum_noise_col.head().tolist()}")
         print(f"\t샘플 값 (마지막 5개): {quantum_noise_col.tail().tolist()}")
 
     if final_output:
         os.makedirs(DATASETS_RESAMPLED_PATH, exist_ok=True)
-        print(f"> {dataset} 데이터셋 저장 중... (지정 디렉토리: {DATASETS_RESAMPLED_PATH})")
+        print(
+            f"> {dataset} 데이터셋 저장 중... (지정 디렉토리: {DATASETS_RESAMPLED_PATH})"
+        )
         to_df_X_train.to_csv(
             os.path.join(DATASETS_RESAMPLED_PATH, f"{dataset}-X-train.csv"), index=False
         )
@@ -302,16 +350,23 @@ def all_process(dataset, is_custom=False, is_smote=False, final_output=True):
         )
         print("  - 테스트 세트 저장 완료")
         print(f"> {dataset} 모든 데이터셋 저장 완료")
-    
+
     print("> 모든 작업이 완료되었습니다.")
     print("=" * 100)
 
 
+__all__ = ['all_process']
+
+
 if __name__ == "__main__":
     is_test = False
-    is_smote = True
+    is_smote = False
     if is_test:
-        all_process("A.csv", is_custom=is_test)
+        all_process(
+            "100000s-NF-custom-dataset-1762184935.csv",
+            is_smote=is_smote,
+            is_custom=is_test,
+        )
     else:
         real_datasets = [
             "NF-BoT-IoT-v3",
@@ -321,6 +376,6 @@ if __name__ == "__main__":
         ]
         for d in real_datasets:
             if is_smote:
-                all_process(f"{d}-smote.csv")
+                all_process(f"{d}.csv", is_smote=is_smote)
             else:
-                all_process(f"{d}.csv")
+                all_process(f"{d}-smote.csv", is_smote=is_smote)

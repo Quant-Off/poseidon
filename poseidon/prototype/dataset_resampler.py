@@ -2,9 +2,10 @@ import os
 
 import numpy as np
 import pandas as pd
+import dask.dataframe as dd
 from dotenv import load_dotenv
 
-from poseidon.data.dataset import read_dataset, clip_partition, shuffle_and_split
+from poseidon.data.dataset import clip_partition, shuffle_and_split
 from poseidon.data.smote_knn import smote
 
 # 환경 변수 로드
@@ -60,18 +61,18 @@ def resample_dataset(
     # 6. SMOTE 적용
     if len(origin_y_unique) != 2:
         print("'Label'의 클래스 수가 2개가 아닙니다! SMOTE를 적용할 수 없습니다!")
-        X_resampled, y_resampled = X, y
+        X_resampled, y_resampled = X.compute(), y.compute()
     else:
         print("> SMOTE 적용 중...")
         try:
             # smote = SMOTE(k_neighbors=k, random_state=random_state)
             # X_resampled, y_resampled = smote.fit_resample(X, y)
             X_resampled, y_resampled = smote(
-                X, y, k=k, sampling_ratio=sampling_ratio, random_state=random_state
+                X.compute(), y.compute(), k=k, sampling_ratio=sampling_ratio, random_state=random_state
             )
         except ValueError as e:
             print(f"처리 중 오류: '{e}' SMOTE를 스킵합니다!")
-            X_resampled, y_resampled = X, y
+            X_resampled, y_resampled = X.compute(), y.compute()
         print("\t- SMOTE 적용 완료\n")
 
     # 7. 리샘플 클래스 분포 출력
@@ -82,8 +83,8 @@ def resample_dataset(
     print("\n")
 
     # 8. 로컬에 저장
-    resampled_df = pd.DataFrame(X_resampled, columns=X.columns)
-    resampled_df["Label"] = y_resampled
+    resampled_df = dd.from_pandas(pd.DataFrame(X_resampled, columns=X.columns), npartitions=20)
+    resampled_df["Label"] = dd.from_array(y_resampled, chunksize=759300)
     if output:
         if output_path is None:
             output_path = DATASETS_RESAMPLED_PATH
@@ -102,3 +103,5 @@ def resample_dataset(
             f"'{dataset_name}' 데이터셋에 대한 전처리 및 SMOTE 리샘플링을 완료했습니다. 결과를 반환합니다."
         )
         return resampled_df
+
+__all__ = ['resample_dataset']

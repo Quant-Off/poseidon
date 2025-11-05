@@ -1,3 +1,5 @@
+import dask.array as da
+import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 import qutip as qt
@@ -82,22 +84,31 @@ def split(resampled_df):
     splited_y_val : pd.Series
     splited_y_test : pd.Series
     """
+    resampled_df = resampled_df.compute()
     splited_X = resampled_df.drop("Label", axis=1)
     splited_y = resampled_df["Label"]
 
     # 첫 번째 분할: 훈련(60%) vs. 임시(40%)
-    splited_X_train, splited_X_temp, splited_y_train, splited_y_temp = train_test_split(
+    splited_X_train_pd, splited_X_temp_pd, splited_y_train_pd, splited_y_temp_pd = train_test_split(
         splited_X, splited_y, test_size=0.4, stratify=splited_y, random_state=42
     )
 
     # 두 번째 분할: 임시를 검증(20%) vs. 테스트(20%)
-    splited_X_val, splited_X_test, splited_y_val, splited_y_test = train_test_split(
-        splited_X_temp,
-        splited_y_temp,
+    splited_X_val_pd, splited_X_test_pd, splited_y_val_pd, splited_y_test_pd = train_test_split(
+        splited_X_temp_pd,
+        splited_y_temp_pd,
         test_size=0.5,
-        stratify=splited_y_temp,
+        stratify=splited_y_temp_pd,
         random_state=42,
     )
+
+    # Dask 변환
+    splited_X_train = dd.from_pandas(splited_X_train_pd, npartitions=20)
+    splited_X_val = dd.from_pandas(splited_X_val_pd, npartitions=20)
+    splited_X_test = dd.from_pandas(splited_X_test_pd, npartitions=20)
+    splited_y_train = dd.from_pandas(splited_y_train_pd, npartitions=20)
+    splited_y_val = dd.from_pandas(splited_y_val_pd, npartitions=20)
+    splited_y_test = dd.from_pandas(splited_y_test_pd, npartitions=20)
 
     return (
         splited_X_train,
@@ -146,25 +157,19 @@ def feature_analysis(scaled_X_train, scaled_X_val, scaled_X_test, feature_names)
 
 
 def apply_entropy(row):
-    byte_counts = np.array([row[feat] for feat in bytes_features])
-    if np.sum(byte_counts) == 0:
+    values = []
+    for feat in bytes_features:
+        try:
+            val = row[feat]  # Dask 호환: row.get 대신 직접 접근
+            if not np.isnan(val):
+                values.append(float(val))
+        except KeyError:
+            val = 0.0
+            values.append(val)
+    if not values:
         return 0.0
-    probs = byte_counts / np.sum(byte_counts)
-    entropy_value = entropy_sn(probs)
-    # JAX 배열이나 numpy 배열을 Python float로 변환
-    try:
-        # JAX 배열인 경우
-        if hasattr(entropy_value, "item"):
-            return float(entropy_value.item())
-        # numpy 배열인 경우
-        elif hasattr(entropy_value, "__len__") and len(entropy_value) == 1:
-            return float(entropy_value[0])
-        # 이미 스칼라인 경우
-        else:
-            return float(entropy_value)
-    except (TypeError, ValueError):
-        # 모든 변환이 실패하면 numpy를 통해 변환
-        return float(np.asarray(entropy_value).item())
+    values_array = da.from_array(np.array(values), chunks='auto')  # Dask 배열로 변환하여 병렬 처리 지원
+    return entropy_sn(values_array)
 
 
 def apply_timing_variance(row):
@@ -173,79 +178,18 @@ def apply_timing_variance(row):
     FLOW_START_MILLISECONDS와 FLOW_END_MILLISECONDS를 기준으로 
     비감소 순서의 타임스탬프 배열을 생성합니다.
     """
-    # 기본 타임스탬프 확인
-    if "FLOW_START_MILLISECONDS" not in row.index or "FLOW_END_MILLISECONDS" not in row.index:
+    timespamps = []
+    for feat in timing_variance_features:
+        try:
+            val = row[feat]
+            if not np.isnan(val):
+                timespamps.append(float(val))
+        except KeyError:
+            continue
+    if len(timespamps) < 2:
         return 0.0
-
-    start_time = float(row["FLOW_START_MILLISECONDS"])
-    end_time = float(row["FLOW_END_MILLISECONDS"])
-
-    # FLOW_END가 FLOW_START보다 작거나 같은 경우 처리
-    if end_time <= start_time:
-        end_time = start_time + 1.0
-
-    # 플로우 지속 시간 기반으로 타임스탬프 시퀀스 생성
-    # DURATION_IN, DURATION_OUT가 있으면 이를 활용하여 더 정확한 타임스탬프 생성
-    duration_ms = end_time - start_time
-
-    if duration_ms <= 0:
-        return 0.0
-
-    # 패킷 수 추정 (IN_PKTS + OUT_PKTS 또는 기본값)
-    total_packets = 1
-    if "IN_PKTS" in row.index and "OUT_PKTS" in row.index:
-        total_packets = max(1, int(row["IN_PKTS"]) + int(row["OUT_PKTS"]))
-
-    # 최소 2개, 최대 100개의 타임스탬프 생성 (너무 많으면 성능 저하)
-    num_timestamps = min(max(2, total_packets // 10), 100)
-
-    # 비감소 순서의 타임스탬프 배열 생성
-    # 균등 간격 또는 지수 분포를 사용하여 실제 패킷 타이밍 시뮬레이션
-    if num_timestamps == 2:
-        # 최소 2개: 시작과 끝만
-        time_values = np.array([start_time, end_time])
-    else:
-        # 시작과 끝 사이에 중간 타임스탬프 생성
-        # IAT 통계가 있으면 이를 활용, 없으면 균등 분포 사용
-        if "SRC_TO_DST_IAT_AVG" in row.index and row["SRC_TO_DST_IAT_AVG"] > 0:
-            # IAT 평균값을 기반으로 간격 생성
-            avg_iat = float(row["SRC_TO_DST_IAT_AVG"])
-            intervals = np.random.exponential(scale=avg_iat, size=num_timestamps - 1)
-        else:
-            # 균등 간격
-            intervals = np.full(num_timestamps - 1, duration_ms / (num_timestamps - 1))
-
-        # 비감소 순서 보장
-        intervals = np.maximum(intervals, 0.1)  # 최소 0.1ms 간격
-        cumulative = np.cumsum(intervals)
-        # 전체 지속 시간에 맞게 스케일 조정
-        if cumulative[-1] > 0:
-            cumulative = cumulative * (duration_ms / cumulative[-1])
-
-        # 시작 타임스탬프에 간격 누적
-        time_values = np.concatenate([[start_time], start_time + cumulative])
-        time_values = np.clip(time_values, start_time, end_time)
-        time_values[-1] = end_time  # 마지막은 정확히 end_time
-
-    # 비감소 순서 확인 및 정렬
-    time_values = np.sort(time_values)
-
-    if len(time_values) < 2:
-        return 0.0
-
-    # timing_variance 함수 호출
-    variance_value = timing_variance(time_values)
-
-    # JAX 배열이나 numpy 배열을 Python float로 변환
-    try:
-        if hasattr(variance_value, "item"):
-            return float(variance_value.item())
-        elif hasattr(variance_value, "__len__") and len(variance_value) == 1:
-            return float(variance_value[0])
-        else:
-            return float(variance_value)
-    except (TypeError, ValueError):
-        return float(np.asarray(variance_value).item())
+    timespamps_array = da.from_array(np.array(sorted(timespamps)), chunks='auto')
+    return timing_variance(timespamps_array, normalize=True)
 
 
 def apply_quantum_noise_simulation(row):
@@ -374,6 +318,11 @@ def apply_quantum_noise_simulation(row):
         elif hasattr(noise_level, "__len__") and len(noise_level) == 1:
             return float(noise_level[0])
         else:
-            return float(noise_level)
+            noise_array = da.from_array(np.asarray(noise_level), chunks='auto')
+            return float(noise_array.compute().item())
     except (TypeError, ValueError):
-        return float(np.asarray(noise_level).item())
+        return 0.0  # 오류 시 기본값
+
+
+__all__ = ['split', 'scaling', 'feature_analysis', 'apply_entropy', 'apply_timing_variance',
+           'apply_quantum_noise_simulation']
