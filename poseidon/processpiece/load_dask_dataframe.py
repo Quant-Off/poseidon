@@ -2,6 +2,8 @@
 Dask 라이브러리를 사용하여 데이터프레임을 불러오는 모듈입니다.
 """
 
+import os
+
 import dask.dataframe as dd
 from dask.distributed import Client
 
@@ -39,6 +41,20 @@ def load_large_dataset(
     # 포세이돈 로깅
     logging = PoseidonLogger().get_logger()
     try:
+        # 파일 경로에서 "DatasetType." 접두사 제거
+        if "DatasetType." in file_path:
+            # 파일 경로와 파일명 분리
+            dir_path = os.path.dirname(file_path)
+            filename = os.path.basename(file_path)
+            # 파일명에서 "DatasetType." 접두사 제거
+            if filename.startswith("DatasetType."):
+                filename = filename.replace("DatasetType.", "", 1)
+            # 경로 재구성
+            if dir_path:
+                file_path = os.path.join(dir_path, filename)
+            else:
+                file_path = filename
+        
         # Dask 클라이언트 생성: 로컬 클러스터로 병렬 처리 (안전한 리소스 관리)
         with Client(
             n_workers=npartitions, threads_per_worker=1
