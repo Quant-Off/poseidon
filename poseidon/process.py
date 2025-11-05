@@ -1,4 +1,5 @@
 import numpy as np
+import dask.dataframe as dd
 from poseidon.data.dataset_type import DatasetType
 from poseidon.processpiece.oversampling import Oversampling
 from poseidon.data.poseidon_dtypes import dtypes
