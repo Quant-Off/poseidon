@@ -1,103 +1,13 @@
 import dask.array as da
-import dask.dataframe as dd
 import numpy as np
-import pandas as pd
 import qutip as qt
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-
 from poseidon.simulations.noise_modeling import BitFlipSimulation, PhaseFlipSimulation
+from poseidon.processpiece.engineering_using_features import (
+    bytes_features,
+    timing_variance_features,
+)
 from poseidon.util.shannon import entropy_sn
 from poseidon.util.timing_variance import timing_variance
-
-
-
-def split(resampled_df):
-    """
-    Parameters:
-    -----------
-    resampled_df : pd.DataFrame
-        SMOTE 리샘플링 후 저장된 데이터셋 (DataFrame)
-
-    Returns:
-    --------
-    splited_X_train : pd.DataFrame
-    splited_X_val : pd.DataFrame
-    splited_X_test : pd.DataFrame
-    splited_y_train : pd.Series
-    splited_y_val : pd.Series
-    splited_y_test : pd.Series
-    """
-    resampled_df = resampled_df.compute()
-    splited_X = resampled_df.drop("Label", axis=1)
-    splited_y = resampled_df["Label"]
-
-    # 첫 번째 분할: 훈련(60%) vs. 임시(40%)
-    splited_X_train_pd, splited_X_temp_pd, splited_y_train_pd, splited_y_temp_pd = train_test_split(
-        splited_X, splited_y, test_size=0.4, stratify=splited_y, random_state=42
-    )
-
-    # 두 번째 분할: 임시를 검증(20%) vs. 테스트(20%)
-    splited_X_val_pd, splited_X_test_pd, splited_y_val_pd, splited_y_test_pd = train_test_split(
-        splited_X_temp_pd,
-        splited_y_temp_pd,
-        test_size=0.5,
-        stratify=splited_y_temp_pd,
-        random_state=42,
-    )
-
-    # Dask 변환
-    splited_X_train = dd.from_pandas(splited_X_train_pd, npartitions=20)
-    splited_X_val = dd.from_pandas(splited_X_val_pd, npartitions=20)
-    splited_X_test = dd.from_pandas(splited_X_test_pd, npartitions=20)
-    splited_y_train = dd.from_pandas(splited_y_train_pd, npartitions=20)
-    splited_y_val = dd.from_pandas(splited_y_val_pd, npartitions=20)
-    splited_y_test = dd.from_pandas(splited_y_test_pd, npartitions=20)
-
-    return (
-        splited_X_train,
-        splited_X_val,
-        splited_X_test,
-        splited_y_train,
-        splited_y_val,
-        splited_y_test,
-    )
-
-
-def scaling(split_X_train, split_X_val, split_X_test):
-    scaler = StandardScaler()
-    scaled_X_train = scaler.fit_transform(split_X_train)
-    scaled_X_val = scaler.transform(split_X_val)
-    scaled_X_test = scaler.transform(split_X_test)
-
-    return scaled_X_train, scaled_X_val, scaled_X_test
-
-
-def feature_analysis(scaled_X_train, scaled_X_val, scaled_X_test, feature_names):
-    # 제외할 피처 목록
-    exclude_features = ["IPV4_SRC_ADDR", "IPV4_DST_ADDR", "L4_SRC_PORT", "L4_DST_PORT"]
-
-    # 모든 피처 이름을 리스트로 구성 (제외할 피처는 제외)
-    columns_list = [name for name in feature_names if name not in exclude_features]
-
-    # DataFrame 생성 시 columns 파라미터에 리스트 전달
-    to_df_X_train = pd.DataFrame(scaled_X_train, columns=columns_list)
-    to_df_X_val = pd.DataFrame(scaled_X_val, columns=columns_list)
-    to_df_X_test = pd.DataFrame(scaled_X_test, columns=columns_list)
-
-    # 각 피처별 히스토그램 출력
-    for column_name in columns_list:
-        print(
-            f"  {column_name} 훈련 세트 히스토그램: {to_df_X_train[column_name].hist()}"
-        )
-        print(
-            f"  {column_name} 검증 세트 히스토그램: {to_df_X_val[column_name].hist()}"
-        )
-        print(
-            f"  {column_name} 테스트 세트 히스토그램: {to_df_X_test[column_name].hist()}"
-        )
-
-    return to_df_X_train, to_df_X_val, to_df_X_test
 
 
 def apply_entropy(row):
@@ -112,14 +22,16 @@ def apply_entropy(row):
             values.append(val)
     if not values:
         return 0.0
-    values_array = da.from_array(np.array(values), chunks='auto')  # Dask 배열로 변환하여 병렬 처리 지원
+    values_array = da.from_array(
+        np.array(values), chunks="auto"
+    )  # Dask 배열로 변환하여 병렬 처리 지원
     return entropy_sn(values_array)
 
 
 def apply_timing_variance(row):
     """
     각 행에서 타임스탬프 배열을 생성하여 timing_variance 함수에 전달합니다.
-    FLOW_START_MILLISECONDS와 FLOW_END_MILLISECONDS를 기준으로 
+    FLOW_START_MILLISECONDS와 FLOW_END_MILLISECONDS를 기준으로
     비감소 순서의 타임스탬프 배열을 생성합니다.
     """
     timespamps = []
@@ -132,7 +44,7 @@ def apply_timing_variance(row):
             continue
     if len(timespamps) < 2:
         return 0.0
-    timespamps_array = da.from_array(np.array(sorted(timespamps)), chunks='auto')
+    timespamps_array = da.from_array(np.array(sorted(timespamps)), chunks="auto")
     return timing_variance(timespamps_array, normalize=True)
 
 
@@ -141,10 +53,20 @@ def apply_quantum_noise_simulation(row):
     이 함수는 각 행에서 quantum_noise_simulation_features를 기반으로 초기 상태 밀도 행렬을 생성하고,
     노이즈 확률 p를 추정한 후, 비트-플립과 페이즈-플립 시뮬레이션을 수행하여 폰 노이만 엔트로피를 계산합니다.
     """
+
+    # quantum_noise_simulation_features 리스트를 사용하여 피처 값 추출
+    def get_feature_value(feat_name, default=0.0):
+        """피처 값을 안전하게 가져오는 헬퍼 함수"""
+        try:
+            val = row.get(feat_name, default) if hasattr(row, "get") else row[feat_name]
+            return max(0.0, float(val)) if not np.isnan(val) else default
+        except (KeyError, TypeError, ValueError):
+            return default
+
     # 1. 초기 상태 밀도 행렬 생성: 바이트 피처 값을 기반으로 큐비트 상태 벡터 생성
     # IN_BYTES와 OUT_BYTES를 정규화하여 큐비트 상태의 파라미터로 사용
-    in_bytes = max(0.0, float(row.get('IN_BYTES', 0)))
-    out_bytes = max(0.0, float(row.get('OUT_BYTES', 0)))
+    in_bytes = get_feature_value("IN_BYTES", 0.0)
+    out_bytes = get_feature_value("OUT_BYTES", 0.0)
     total_bytes = in_bytes + out_bytes
 
     if total_bytes > 0:
@@ -153,7 +75,7 @@ def apply_quantum_noise_simulation(row):
         alpha = np.sqrt(in_bytes / total_bytes)
         beta = np.sqrt(out_bytes / total_bytes)
         # 정규화 (소수점 오차 보정)
-        norm = np.sqrt(alpha ** 2 + beta ** 2)
+        norm = np.sqrt(alpha**2 + beta**2)
         if norm > 0:
             alpha = alpha / norm
             beta = beta / norm
@@ -169,11 +91,12 @@ def apply_quantum_noise_simulation(row):
     rho0 = qt.ket2dm(psi0)
 
     # 2. 노이즈 확률 p 추정: 여러 피처를 종합적으로 고려
+    # quantum_noise_simulation_features에서 필요한 피처 값들을 추출
     # 2.1 재전송 비율 기반 확률 (에러율 반영)
-    in_pkts = max(1.0, float(row.get('IN_PKTS', 1)))
-    retrans_in_pkts = max(0.0, float(row.get('RETRANSMITTED_IN_PKTS', 0)))
-    out_pkts = max(1.0, float(row.get('OUT_PKTS', 1)))
-    retrans_out_pkts = max(0.0, float(row.get('RETRANSMITTED_OUT_PKTS', 0)))
+    in_pkts = max(1.0, get_feature_value("IN_PKTS", 1.0))
+    retrans_in_pkts = get_feature_value("RETRANSMITTED_IN_PKTS", 0.0)
+    out_pkts = max(1.0, get_feature_value("OUT_PKTS", 1.0))
+    retrans_out_pkts = get_feature_value("RETRANSMITTED_OUT_PKTS", 0.0)
 
     # ZeroDivisionError 방지: 각 방향별로 안전하게 계산
     p_retrans_in = retrans_in_pkts / in_pkts if in_pkts > 0 else 0.0
@@ -181,16 +104,18 @@ def apply_quantum_noise_simulation(row):
     p_retrans = (p_retrans_in + p_retrans_out) / 2.0
 
     # 2.2 IAT 표준편차 기반 확률 (타이밍 불확실성 반영)
-    iat_stddev_src = max(0.0, float(row.get('SRC_TO_DST_IAT_STDDEV', 0)))
-    iat_stddev_dst = max(0.0, float(row.get('DST_TO_SRC_IAT_STDDEV', 0)))
+    iat_stddev_src = get_feature_value("SRC_TO_DST_IAT_STDDEV", 0.0)
+    iat_stddev_dst = get_feature_value("DST_TO_SRC_IAT_STDDEV", 0.0)
     # 표준편차를 [0, 1] 범위로 정규화 (예: max_stddev = 1000ms 가정)
     max_iat_stddev = 1000.0  # 최대 표준편차 가정값
-    normalized_iat_stddev = min(1.0, (iat_stddev_src + iat_stddev_dst) / (2.0 * max_iat_stddev))
+    normalized_iat_stddev = min(
+        1.0, (iat_stddev_src + iat_stddev_dst) / (2.0 * max_iat_stddev)
+    )
     p_iat = 0.1 * normalized_iat_stddev  # 스케일링
 
     # 2.3 재전송 바이트 비율 기반 확률
-    retrans_in_bytes = max(0.0, float(row.get('RETRANSMITTED_IN_BYTES', 0)))
-    retrans_out_bytes = max(0.0, float(row.get('RETRANSMITTED_OUT_BYTES', 0)))
+    retrans_in_bytes = get_feature_value("RETRANSMITTED_IN_BYTES", 0.0)
+    retrans_out_bytes = get_feature_value("RETRANSMITTED_OUT_BYTES", 0.0)
     total_retrans_bytes = retrans_in_bytes + retrans_out_bytes
 
     if total_bytes > 0:
@@ -199,31 +124,51 @@ def apply_quantum_noise_simulation(row):
         p_bytes = 0.0
 
     # 2.4 전송 속도 변동성 기반 확률 (초당 바이트 전송 속도와 IAT 최대값의 불규칙성)
-    bytes_per_sec_src = max(0.0, float(row.get('SRC_TO_DST_SECOND_BYTES', 0)))
-    bytes_per_sec_dst = max(0.0, float(row.get('DST_TO_SRC_SECOND_BYTES', 0)))
+    bytes_per_sec_src = get_feature_value("SRC_TO_DST_SECOND_BYTES", 0.0)
+    bytes_per_sec_dst = get_feature_value("DST_TO_SRC_SECOND_BYTES", 0.0)
     avg_bytes_per_sec = (bytes_per_sec_src + bytes_per_sec_dst) / 2.0
 
-    # IAT 최대값과 평균값을 비교하여 변동성 추정
-    iat_max_src = max(0.0, float(row.get('SRC_TO_DST_IAT_MAX', 0)))
-    iat_max_dst = max(0.0, float(row.get('DST_TO_SRC_IAT_MAX', 0)))
-    iat_avg_src = max(0.0, float(row.get('SRC_TO_DST_IAT_AVG', 0)))
-    iat_avg_dst = max(0.0, float(row.get('DST_TO_SRC_IAT_AVG', 0)))
+    # IAT 통계값 추출 (quantum_noise_simulation_features에 포함된 모든 IAT 피처 사용)
+    iat_min_src = get_feature_value("SRC_TO_DST_IAT_MIN", 0.0)
+    iat_max_src = get_feature_value("SRC_TO_DST_IAT_MAX", 0.0)
+    iat_avg_src = get_feature_value("SRC_TO_DST_IAT_AVG", 0.0)
+    iat_min_dst = get_feature_value("DST_TO_SRC_IAT_MIN", 0.0)
+    iat_max_dst = get_feature_value("DST_TO_SRC_IAT_MAX", 0.0)
+    iat_avg_dst = get_feature_value("DST_TO_SRC_IAT_AVG", 0.0)
 
     avg_iat_max = (iat_max_src + iat_max_dst) / 2.0
     avg_iat_avg = (iat_avg_src + iat_avg_dst) / 2.0
+    avg_iat_min = (iat_min_src + iat_min_dst) / 2.0
 
     # IAT 최대값이 평균값보다 크면 변동성이 크다는 의미
     if avg_iat_avg > 0:
         # 변동성 계수: 최대값/평균값 (1보다 크면 불규칙성 증가)
         variability_ratio = avg_iat_max / avg_iat_avg
         # 정규화하여 노이즈 확률로 변환 (비율이 10 이상이면 최대값 도달)
-        p_timing_iat = min(0.25, (variability_ratio - 1.0) / 10.0) if variability_ratio > 1.0 else 0.0
+        p_timing_iat = (
+            min(0.25, (variability_ratio - 1.0) / 10.0)
+            if variability_ratio > 1.0
+            else 0.0
+        )
         p_timing_iat = max(0.0, p_timing_iat)
     elif avg_iat_max > 0:
         # 평균값이 없지만 최대값이 있는 경우 직접 사용
-        p_timing_iat = min(0.25, avg_iat_max / (10.0 * 1000.0))  # 10초 이상이면 0.25로 제한
+        p_timing_iat = min(
+            0.25, avg_iat_max / (10.0 * 1000.0)
+        )  # 10초 이상이면 0.25로 제한
     else:
         p_timing_iat = 0.0
+
+    # IAT 최소값도 변동성에 활용 (최대값과 최소값의 차이가 클수록 불규칙성 증가)
+    if avg_iat_max > 0 and avg_iat_min >= 0:
+        iat_range_ratio = (
+            (avg_iat_max - avg_iat_min) / avg_iat_max if avg_iat_max > 0 else 0.0
+        )
+        p_timing_range = min(
+            0.05, iat_range_ratio * 0.1
+        )  # 범위 비율을 노이즈 확률로 변환
+    else:
+        p_timing_range = 0.0
 
     # 전송 속도가 낮은데 IAT가 높으면 불안정한 것으로 간주
     # 전송 속도 기반 추가 노이즈 확률 (낮은 전송 속도는 높은 지연을 의미할 수 있음)
@@ -233,12 +178,11 @@ def apply_quantum_noise_simulation(row):
     else:
         p_timing_speed = 0.05  # 전송 속도가 0이면 최소 노이즈
 
-    p_timing = min(0.3, p_timing_iat + p_timing_speed)
+    p_timing = min(0.3, p_timing_iat + p_timing_speed + p_timing_range)
 
     # 종합 노이즈 확률: 가중 평균
     p = np.clip(
-        0.5 * p_retrans + 0.2 * p_iat + 0.2 * p_bytes + 0.1 * p_timing,
-        0.0, 1.0
+        0.5 * p_retrans + 0.2 * p_iat + 0.2 * p_bytes + 0.1 * p_timing, 0.0, 1.0
     )
 
     # p가 너무 작으면 최소값 보장 (양자 시뮬레이션의 의미 보존)
@@ -246,11 +190,11 @@ def apply_quantum_noise_simulation(row):
 
     # 3. Bit-Flip 시뮬레이션 (생성된 초기 상태 사용)
     bit_flip = BitFlipSimulation(initial_state=rho0, p_values=[p]).simulate()
-    entropy_bit = bit_flip['entropies'][0]
+    entropy_bit = bit_flip["entropies"][0]
 
     # 4. Phase-Flip 시뮬레이션 (생성된 초기 상태 사용)
     phase_flip = PhaseFlipSimulation(initial_state=rho0, p_values=[p]).simulate()
-    entropy_phase = phase_flip['entropies'][0]
+    entropy_phase = phase_flip["entropies"][0]
 
     # 5. 평균 엔트로피 계산
     noise_level = (entropy_bit + entropy_phase) / 2.0
@@ -262,11 +206,10 @@ def apply_quantum_noise_simulation(row):
         elif hasattr(noise_level, "__len__") and len(noise_level) == 1:
             return float(noise_level[0])
         else:
-            noise_array = da.from_array(np.asarray(noise_level), chunks='auto')
+            noise_array = da.from_array(np.asarray(noise_level), chunks="auto")
             return float(noise_array.compute().item())
     except (TypeError, ValueError):
         return 0.0  # 오류 시 기본값
 
 
-__all__ = ['split', 'scaling', 'feature_analysis', 'apply_entropy', 'apply_timing_variance',
-           'apply_quantum_noise_simulation']
+__all__ = ["apply_entropy", "apply_timing_variance", "apply_quantum_noise_simulation"]

@@ -1,3 +1,7 @@
+"""
+원본 데이터셋에서 특정 피처의 불균형을 해결하기 위해 SMOTE 오버샘플링을 적용하는 클래스입니다.
+"""
+
 import os
 
 import dask.dataframe as dd
@@ -22,6 +26,8 @@ if not DATASETS_RESAMPLED_PATH or not DATASETS_ORIGIN_PATH or not DATASETS_CUSTO
 
 class Oversampling:
     """
+    원본 데이터셋에서 특정 피처의 불균형을 해결하기 위해 SMOTE 오버샘플링을 적용하는 클래스입니다.
+
     self.dataset: 데이터셋의 이름
     self.dataset_path: 선언 시 호출된 데이터셋 최종 경로 (확장자 포함)
 
