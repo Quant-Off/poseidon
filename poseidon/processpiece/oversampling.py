@@ -10,9 +10,9 @@ import pandas as pd
 from dotenv import load_dotenv
 
 from poseidon.data.dataset import clip_partition, shuffle_and_split
-from poseidon.data.dataset_type import DatasetType
 from poseidon.data.smote_knn import smote
 from poseidon.processpiece.load_dask_dataframe import load_large_dataset
+from poseidon.log.poseidon_log import PoseidonLogger
 
 load_dotenv(verbose=True)
 DATASETS_ORIGIN_PATH = os.getenv("DATASETS_ORIGIN_PATH")
@@ -22,6 +22,9 @@ if not DATASETS_RESAMPLED_PATH or not DATASETS_ORIGIN_PATH or not DATASETS_CUSTO
     raise ValueError(
         "DATASETS_RESAMPLED_PATH, DATASETS_ORIGIN_PATH 또는 DATASETS_CUSTOM_PATH 환경 변수가 설정되지 않았습니다!"
     )
+
+
+logger = PoseidonLogger().get_logger()
 
 
 class Oversampling:
@@ -34,24 +37,9 @@ class Oversampling:
     경우에 따라 tqdm 기능이 추가될 수 있습니다.
     """
 
-    def __init__(
-        self, dataset: DatasetType = None, is_smote_req=True, test_set_filename=None
-    ):
-        self.dataset = dataset
-        self.test_set_filename = test_set_filename
-        # 테스트 셋이 아닌 경우
-        if dataset != DatasetType.CUSTOM:
-            # 오버샘플링이 필요한 경우는 ORIGIN 에서 가져옴 (파일 이름에 변경 없음)
-            if is_smote_req:
-                self.dataset_path = os.path.join(DATASETS_ORIGIN_PATH, f"{dataset}.csv")
-            else:  # 오버샘플링을 생략하는 경우는 RESAMPLED 에서 가져옴 (파일 이름에 "-smote" 추가되어 있음)
-                self.dataset_path = os.path.join(
-                    DATASETS_RESAMPLED_PATH, f"{dataset}-smote.csv"
-                )
-        else:  # 데이터셋을 호출한 경우는 CUSTOM 에서 가져옴 (사용자가 파일 이름 지정)
-            self.dataset_path = os.path.join(
-                DATASETS_CUSTOM_PATH, f"{test_set_filename}.csv"
-            )
+    def __init__(self, dataset_path: str):
+        self.dataset_path = dataset_path
+        self.dataset_name = os.path.basename(dataset_path)  # 확장자명 포함
 
     def load_chunks(
         self, file_format="csv", dtypes=None, blocksize="256MB", npartitions=20
@@ -157,84 +145,48 @@ class Oversampling:
     def save_local(
         self,
         resampled_df,
-        save_filename=None,
-        path=None,
+        output_path: str = DATASETS_RESAMPLED_PATH,
         use_smote_suffix=True,
         use_pandas_output=True,
         index=False,
     ):
-        try:
-            from tqdm import tqdm
-
-            write_fn = tqdm.write
-        except ImportError:
-            write_fn = print
-
-        # 파일명 결정: save_filename이 None이면 test_set_filename 또는 dataset 사용
-        if save_filename is None:
-            if self.dataset == DatasetType.CUSTOM and self.test_set_filename:
-                # 확장자 제거 (.csv 등)
-                save_filename = os.path.splitext(self.test_set_filename)[0]
-            elif self.dataset:
-                save_filename = str(self.dataset)
-            else:
-                save_filename = "resampled_dataset"
-
-        # 파일명에서 경로 구분자 제거 (파일명만 추출)
-        save_filename = os.path.basename(save_filename)
-        # 확장자 제거 (이미 확장자가 있을 수 있음)
-        save_filename = os.path.splitext(save_filename)[0]
-
-        # 최종 파일명 생성
-        suffix = "-smote" if use_smote_suffix else ""
-        filename = f"{save_filename}{suffix}.csv"
-
-        # 저장 경로 결정
-        if path is None:
-            # DATASETS_RESAMPLED_PATH 디렉토리가 없으면 생성
-            os.makedirs(DATASETS_RESAMPLED_PATH, exist_ok=True)
-            save_path = os.path.join(DATASETS_RESAMPLED_PATH, filename)
+        if use_smote_suffix:
+            # 확장자명은 이미 self.dataset_name에 포함되어 있기 때문에, 뒤에서부터 "."을 읽고 확장자 앞 부분에 "-smote" 추가
+            save_filename = (
+                self.dataset_name.rsplit(".", 1)[0]
+                + "-smote."
+                + self.dataset_name.rsplit(".", 1)[1]
+            )
         else:
-            # 지정된 경로가 디렉토리인지 파일인지 확인
-            if os.path.isdir(path) or (
-                not os.path.exists(path) and not path.endswith(".csv")
-            ):
-                # 디렉토리인 경우 파일명 추가
-                os.makedirs(path, exist_ok=True)
-                save_path = os.path.join(path, filename)
-            else:
-                # 파일 경로인 경우 그대로 사용
-                save_path = path
+            save_filename = self.dataset_name
 
         if use_pandas_output:
             # Dask DataFrame을 단일 CSV 파일로 저장하기 위해 compute() 사용
-            write_fn(
-                f"> Pandas 데이터프레임을 로컬에 저장 중... (지정된 최종 경로: {save_path})"
+            logger.info(
+                "Pandas 데이터프레임 저장 중 ... (지정 경로: %s)",
+                os.path.join(output_path, save_filename),
             )
-            resampled_df.compute().to_csv(save_path, index=index)
-            write_fn("  - Pandas 데이터프레임 로컬에 저장 완료")
+            if isinstance(resampled_df, pd.DataFrame):
+                resampled_df.to_csv(
+                    os.path.join(output_path, save_filename), index=index
+                )
+            elif isinstance(resampled_df, dd.DataFrame):
+                resampled_df.compute().to_csv(
+                    os.path.join(output_path, save_filename), index=index
+                )
+            else:
+                raise ValueError(
+                    f"'{type(resampled_df)}'은(는) 지원되지 않는 데이터 타입입니다."
+                )
+            logger.info("  - Pandas 데이터프레임 저장 완료")
         else:
             # Dask DataFrame을 파티션별로 저장
-            # save_path를 디렉토리로 사용하고, 각 파티션 파일명을 name_function으로 지정
-            save_dir = (
-                os.path.dirname(save_path)
-                if os.path.dirname(save_path)
-                else DATASETS_RESAMPLED_PATH
+            logger.info(
+                "Dask 데이터프레임 저장 중 ... (지정 경로: %s)",
+                os.path.join(output_path, save_filename),
             )
-            os.makedirs(save_dir, exist_ok=True)
-
-            # 파일명에서 확장자 제거 (예: "dataset-smote.csv" -> "dataset-smote")
-            base_filename = os.path.splitext(os.path.basename(save_path))[0]
-
-            # 각 파티션 파일명을 생성하는 함수
-            def name_function(i):
-                return os.path.join(save_dir, f"{base_filename}-{i}.part")
-
-            write_fn(
-                f"> Dask 데이터프레임을 로컬에 저장 중... (디렉토리: {save_dir}, 파일명 형식: {base_filename}-{{번호}}.part)"
-            )
-            resampled_df.to_csv(save_dir, name_function=name_function, index=index)
-            write_fn("  - Dask 데이터프레임 로컬에 저장 완료")
+            resampled_df.to_csv(os.path.join(output_path, save_filename), index=index)
+            logger.info("  - Dask 데이터프레임 저장 완료")
 
 
 __all__ = ["Oversampling"]

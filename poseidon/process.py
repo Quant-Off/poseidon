@@ -1,8 +1,6 @@
 import os
 import numpy as np
-import dask.dataframe as dd
 from dotenv import load_dotenv
-from poseidon.data.dataset_type import DatasetType
 from poseidon.processpiece.oversampling import Oversampling
 from poseidon.data.poseidon_dtypes import dtypes
 from poseidon.processpiece.engineering_split import DatasetSplit
@@ -12,7 +10,7 @@ from poseidon.processpiece.feature_calculate import (
     apply_timing_variance,
     apply_quantum_noise_simulation,
 )
-from poseidon.processpiece.load_dask_dataframe import load_large_dataset
+from poseidon.processpiece.load_dask_dataframe import load_large_dataset, switch_to_dask
 from poseidon.log.poseidon_log import PoseidonLogger
 
 from tqdm import tqdm
@@ -20,26 +18,28 @@ from tqdm import tqdm
 logger = PoseidonLogger().get_logger()
 load_dotenv(verbose=True)
 DATASETS_RESAMPLED_PATH = os.getenv("DATASETS_RESAMPLED_PATH")
+DATASETS_CUSTOM_PATH = os.getenv("DATASETS_CUSTOM_PATH")
 
 
 def process():
-    req_smote = False
-
+    req_smote = True
     save_train = True
     save_val = False
     save_test = False
+    # use_dataset = f"{DATASETS_CUSTOM_PATH}/25000s-NF-custom-dataset-1762267172.csv"
+    use_dataset = f"{DATASETS_CUSTOM_PATH}/10000s-NF-custom-dataset-1762341664.csv"
+
     logger.info("데이터셋 처리 시작")
     if req_smote:
-        resampled_df, ovs = process_oversampling(
-            dataset=DatasetType.NF_UNSW_NB15_V3, req_smote=True
-        )
+        resampled_df = process_oversampling(dataset_path=use_dataset)
     else:
         resampled_df = load_large_dataset(
-            file_path=f"{DATASETS_RESAMPLED_PATH}/NF-UNSW-NB15-v3-smote.csv",
+            file_path=use_dataset,
             blocksize="256MB",
             dtypes=dtypes,
             npartitions=20,
         )
+    ovs = Oversampling(dataset_path=use_dataset)
     logger.info("  - 데이터셋 처리 완료")
 
     logger.info("데이터셋 훈련, 검증, 테스트 분할 시작")
@@ -59,7 +59,12 @@ def process():
     X_train, X_val, X_test = DatasetScaling().scale(
         splited_X_train, splited_X_val, splited_X_test
     )
-    logger.info("  - 데이터셋 스케일링 완료")
+    logger.info(
+        "  - 데이터셋 스케일링 완료 (데이터 타입 열거: 훈련: %s, 검증: %s, 테스트: %s)",
+        type(X_train),
+        type(X_val),
+        type(X_test),
+    )
 
     logger.info("섀넌 엔트로피 계산 시작")
     X_train, X_val, X_test = cal_shannon_entropy(X_train, X_val, X_test)
@@ -76,20 +81,21 @@ def process():
     # 파일 저장
     if save_train:
         logger.info("훈련 세트 저장 시작")
-        ovs.save_local(X_train, use_pandas_output=False)
+        X_train.to_csv(os.path.join(DATASETS_RESAMPLED_PATH, f"{use_dataset}-X-train.csv"), index=False)
+        # ovs.save_local(resampled_df=X_train, use_pandas_output=False)
         logger.info("  - 훈련 세트 저장 완료")
     if save_val:
         logger.info("검증 세트 저장 시작")
-        ovs.save_local(X_val, use_pandas_output=False)
+        ovs.save_local(resampled_df=X_val, use_pandas_output=False)
         logger.info("  - 검증 세트 저장 완료")
     if save_test:
         logger.info("테스트 세트 저장 시작")
-        ovs.save_local(X_test, use_pandas_output=False)
+        ovs.save_local(resampled_df=X_test, use_pandas_output=False)
         logger.info("  - 테스트 세트 저장 완료")
     logger.info("모든 작업 완료")
 
 
-def process_oversampling(dataset, req_smote, test_set_filename=None):
+def process_oversampling(dataset_path: str):
     # 각 작업 단계를 tqdm으로 진행률 표시 (총 8단계)
     with tqdm(
         total=8,
@@ -100,14 +106,7 @@ def process_oversampling(dataset, req_smote, test_set_filename=None):
         dynamic_ncols=True,
     ) as pbar:
         # 1. Oversampling 객체 생성
-        pbar.set_description("데이터셋 로드")
-        ovs = Oversampling(
-            dataset=dataset,
-            is_smote_req=req_smote,
-            test_set_filename=test_set_filename,
-        )
-        tqdm.write("데이터셋 로드 완료")
-        pbar.update(1)
+        ovs = Oversampling(dataset_path=dataset_path)
 
         # 2. 데이터셋 청크 로드
         pbar.set_description("데이터셋 청크 로드")
@@ -154,14 +153,17 @@ def process_oversampling(dataset, req_smote, test_set_filename=None):
         pbar.update(1)
 
         # 8. 반환
-        return df, ovs
+        return df
 
 
-def cal_shannon_entropy(to_df_X_train, to_df_X_val, to_df_X_test):
+def cal_shannon_entropy(
+    to_df_X_train: np.ndarray, to_df_X_val: np.ndarray, to_df_X_test: np.ndarray
+):
     def apply_entropy_dask(row):
         return apply_entropy(row)
 
-    to_df_X_train = dd.from_pandas(to_df_X_train, npartitions=20)
+    # Dask 데이터프레임인지 확인하고, 아니면 변환
+    to_df_X_train = switch_to_dask(to_df_X_train)
     to_df_X_train["packet_entropy"] = to_df_X_train.apply(
         apply_entropy_dask,
         axis=1,
@@ -172,7 +174,7 @@ def cal_shannon_entropy(to_df_X_train, to_df_X_val, to_df_X_test):
         lambda x: float(x.item()) if hasattr(x, "item") else float(x)
     )
 
-    to_df_X_val = dd.from_pandas(to_df_X_val, npartitions=20)
+    to_df_X_val = switch_to_dask(to_df_X_val)
     to_df_X_val["packet_entropy"] = to_df_X_val.apply(
         apply_entropy_dask,
         axis=1,
@@ -183,7 +185,7 @@ def cal_shannon_entropy(to_df_X_train, to_df_X_val, to_df_X_test):
         lambda x: float(x.item()) if hasattr(x, "item") else float(x)
     )
 
-    to_df_X_test = dd.from_pandas(to_df_X_test, npartitions=20)
+    to_df_X_test = switch_to_dask(to_df_X_test)
     to_df_X_test["packet_entropy"] = to_df_X_test.apply(
         apply_entropy_dask,
         axis=1,
@@ -197,11 +199,13 @@ def cal_shannon_entropy(to_df_X_train, to_df_X_val, to_df_X_test):
     return to_df_X_train, to_df_X_val, to_df_X_test
 
 
-def cal_timing_variance(to_df_X_train, to_df_X_val, to_df_X_test):
+def cal_timing_variance(
+    to_df_X_train: np.ndarray, to_df_X_val: np.ndarray, to_df_X_test: np.ndarray
+):
     def apply_timing_variance_dask(row):
         return apply_timing_variance(row)
 
-    to_df_X_train = dd.from_pandas(to_df_X_train, npartitions=20)
+    to_df_X_train = switch_to_dask(to_df_X_train)
     to_df_X_train["timing_variance"] = to_df_X_train.apply(
         apply_timing_variance_dask,
         axis=1,
@@ -212,7 +216,7 @@ def cal_timing_variance(to_df_X_train, to_df_X_val, to_df_X_test):
         lambda x: float(x.item()) if hasattr(x, "item") else float(x)
     )
 
-    to_df_X_val = dd.from_pandas(to_df_X_val, npartitions=20)
+    to_df_X_val = switch_to_dask(to_df_X_val)
     to_df_X_val["timing_variance"] = to_df_X_val.apply(
         apply_timing_variance_dask,
         axis=1,
@@ -223,7 +227,7 @@ def cal_timing_variance(to_df_X_train, to_df_X_val, to_df_X_test):
         lambda x: float(x.item()) if hasattr(x, "item") else float(x)
     )
 
-    to_df_X_test = dd.from_pandas(to_df_X_test, npartitions=20)
+    to_df_X_test = switch_to_dask(to_df_X_test)
     to_df_X_test["timing_variance"] = to_df_X_test.apply(
         apply_timing_variance_dask,
         axis=1,
@@ -237,7 +241,9 @@ def cal_timing_variance(to_df_X_train, to_df_X_val, to_df_X_test):
     return to_df_X_train, to_df_X_val, to_df_X_test
 
 
-def cal_quantum_noise_simulation(to_df_X_train, to_df_X_val, to_df_X_test):
+def cal_quantum_noise_simulation(
+    to_df_X_train: np.ndarray, to_df_X_val: np.ndarray, to_df_X_test: np.ndarray
+):
     """
     양자 노이즈 시뮬레이션 연산을 계산하여 각 데이터프레임에 'quantum_noise_simulation' 피처를 추가합니다.
 
@@ -263,7 +269,7 @@ def cal_quantum_noise_simulation(to_df_X_train, to_df_X_val, to_df_X_test):
     def apply_quantum_noise_simulation_dask(row):
         return apply_quantum_noise_simulation(row)
 
-    to_df_X_train = dd.from_pandas(to_df_X_train, npartitions=20)
+    to_df_X_train = switch_to_dask(to_df_X_train)
     to_df_X_train["quantum_noise_simulation"] = to_df_X_train.apply(
         apply_quantum_noise_simulation_dask,
         axis=1,
@@ -274,7 +280,7 @@ def cal_quantum_noise_simulation(to_df_X_train, to_df_X_val, to_df_X_test):
         "quantum_noise_simulation"
     ].apply(lambda x: float(x.item()) if hasattr(x, "item") else float(x))
 
-    to_df_X_val = dd.from_pandas(to_df_X_val, npartitions=20)
+    to_df_X_val = switch_to_dask(to_df_X_val)
     to_df_X_val["quantum_noise_simulation"] = to_df_X_val.apply(
         apply_quantum_noise_simulation_dask,
         axis=1,
@@ -285,7 +291,7 @@ def cal_quantum_noise_simulation(to_df_X_train, to_df_X_val, to_df_X_test):
         "quantum_noise_simulation"
     ].apply(lambda x: float(x.item()) if hasattr(x, "item") else float(x))
 
-    to_df_X_test = dd.from_pandas(to_df_X_test, npartitions=20)
+    to_df_X_test = switch_to_dask(to_df_X_test)
     to_df_X_test["quantum_noise_simulation"] = to_df_X_test.apply(
         apply_quantum_noise_simulation_dask,
         axis=1,
