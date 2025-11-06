@@ -11,7 +11,7 @@ DATASETS_CUSTOM_PATH = os.getenv("DATASETS_CUSTOM_PATH")
 
 def oversampling_test():
     ovs = Oversampling(
-        dataset_path=f"{DATASETS_CUSTOM_PATH}/10000s-NF-custom-dataset-1762341664.csv"
+        f"{DATASETS_CUSTOM_PATH}/10000s-NF-custom-dataset-1762341664.csv"
     )
 
     df: dd.DataFrame = ovs.load_chunks(

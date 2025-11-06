@@ -56,7 +56,9 @@ def engineering_test():
     print(f"타이밍 변동 계산 후 X_test 타입: {type(X_test)}")
     print("=" * 100)
 
-    X_train, X_val, X_test = adding_feature_quantum_noise_simulation(X_train, X_val, X_test)
+    X_train, X_val, X_test = adding_feature_quantum_noise_simulation(
+        X_train, X_val, X_test
+    )
     print(f"양자 노이즈 시뮬레이션 계산 후 X_train 타입: {type(X_train)}")
     print(f"양자 노이즈 시뮬레이션 계산 후 X_val 타입: {type(X_val)}")
     print(f"양자 노이즈 시뮬레이션 계산 후 X_test 타입: {type(X_test)}")
@@ -83,8 +85,7 @@ def engineering_test():
     num_chunks = (total_rows + chunk_size - 1) // chunk_size  # 올림 계산
     with tqdm(total=num_chunks, desc="CSV 저장 중", unit="청크", ncols=100) as pbar:
         output_path = f"{DATASETS_RESAMPLED_PATH}/10000s-NF-custom-dataset-1762341664-smote-X-train-quantum_noise_simulation.csv"
-        
-    
+
         # 첫 번째 청크는 헤더와 함께 저장
         X_train.iloc[:chunk_size].to_csv(
             output_path,
@@ -92,7 +93,7 @@ def engineering_test():
             index=False,
         )
         pbar.update(1)
-        
+
         # 나머지 청크들을 추가 모드로 저장
         for i in range(1, num_chunks):
             start_idx = i * chunk_size
