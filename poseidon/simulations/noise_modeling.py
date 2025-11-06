@@ -71,6 +71,7 @@ Q. T. Felix
 
 MIT License
 """
+
 import os
 
 import matplotlib.font_manager as fm
@@ -95,7 +96,9 @@ _density_matrix_initial_state: qutip.Qobj = (basis(2, 0) + basis(2, 1)).unit().p
 
 
 class SimulateResult:
-    def __init__(self, fidelities=None, purities=None, entropies=None, density_matrix=None):
+    def __init__(
+        self, fidelities=None, purities=None, entropies=None, density_matrix=None
+    ):
         self.fidelities = [] if fidelities is None else fidelities
         self.purities = [] if purities is None else purities
         self.entropies = [] if entropies is None else entropies
@@ -133,7 +136,7 @@ class BitFlipSimulation:
             raise ValueError("초기 상태는 QuTiP ket 벡터 또는 밀도 행렬이어야 합니다!")
         # 밀도 행렬이 에르미트이고 대각합이 1인지 검사
         if not np.allclose(
-                rho.data.to_array(), rho.dag().data.to_array().conj().T, atol=1e-10
+            rho.data.to_array(), rho.dag().data.to_array().conj().T, atol=1e-10
         ):
             raise ValueError("밀도 행렬은 에르미트(Hermitian) 행렬이어야 합니다!")
         if not np.isclose(rho.tr(), 1.0, atol=1e-10):
@@ -146,7 +149,9 @@ class BitFlipSimulation:
         if not isinstance(p_values, list):
             raise ValueError("p_values는 실수 리스트 타입이어야 합니다!")
         if not all(0 <= p <= 1 for p in p_values):
-            raise ValueError("p_values 리스트의 개별 값은 모두 0 이상 1 이하여야 합니다!")
+            raise ValueError(
+                "p_values 리스트의 개별 값은 모두 0 이상 1 이하여야 합니다!"
+            )
         self.p_values = p_values
         # 결과 저장용 배열
         self.result = SimulateResult()
@@ -227,10 +232,29 @@ class BitFlipSimulation:
     def show_plot(self):
         _, ax = plt.subplots(figsize=(10, 6))
         ax.plot(
-            self.p_values, self.result.fidelities, "bo-", label="Fidelity", linewidth=2, markersize=8
+            self.p_values,
+            self.result.fidelities,
+            "bo-",
+            label="Fidelity",
+            linewidth=2,
+            markersize=8,
         )
-        ax.plot(self.p_values, self.result.purities, "rs--", label="Purity", linewidth=2, markersize=8)
-        ax.plot(self.p_values, self.result.entropies, "g^-.", label="Entropy", linewidth=2, markersize=8)
+        ax.plot(
+            self.p_values,
+            self.result.purities,
+            "rs--",
+            label="Purity",
+            linewidth=2,
+            markersize=8,
+        )
+        ax.plot(
+            self.p_values,
+            self.result.entropies,
+            "g^-.",
+            label="Entropy",
+            linewidth=2,
+            markersize=8,
+        )
         ax.set_xlabel("비트-플립 확률 p", fontsize=12)
         ax.set_ylabel("충실도, 순수도, 엔트로피", fontsize=12)
         ax.set_title("비트-플립 확률 값 vs. 충실도, 순수도, 엔트로피", fontsize=14)
@@ -285,7 +309,7 @@ class PhaseFlipSimulation:
             raise ValueError("초기 상태는 QuTiP ket 벡터 또는 밀도 행렬이어야 합니다!")
         # 밀도 행렬이 에르미트이고 대각합이 1인지 검사
         if not np.allclose(
-                rho.data.to_array(), rho.dag().data.to_array().conj().T, atol=1e-10
+            rho.data.to_array(), rho.dag().data.to_array().conj().T, atol=1e-10
         ):
             raise ValueError("밀도 행렬은 에르미트(Hermitian) 행렬이어야 합니다!")
         if not np.isclose(rho.tr(), 1.0, atol=1e-10):
@@ -298,7 +322,9 @@ class PhaseFlipSimulation:
         if not isinstance(p_values, list):
             raise ValueError("p_values는 실수 리스트 타입이어야 합니다!")
         if not all(0 <= p <= 1 for p in p_values):
-            raise ValueError("p_values 리스트의 개별 값은 모두 0 이상 1 이하여야 합니다!")
+            raise ValueError(
+                "p_values 리스트의 개별 값은 모두 0 이상 1 이하여야 합니다!"
+            )
         self.p_values = p_values
         # 결과 저장용 배열
         self.result = SimulateResult()
@@ -382,10 +408,29 @@ class PhaseFlipSimulation:
     def show_plot(self):
         _, ax = plt.subplots(figsize=(10, 6))
         ax.plot(
-            self.p_values, self.result.fidelities, "ro-", label="Fidelity", linewidth=2, markersize=8
+            self.p_values,
+            self.result.fidelities,
+            "ro-",
+            label="Fidelity",
+            linewidth=2,
+            markersize=8,
         )
-        ax.plot(self.p_values, self.result.purities, "bs--", label="Purity", linewidth=2, markersize=8)
-        ax.plot(self.p_values, self.result.entropies, "g^-.", label="Entropy", linewidth=2, markersize=8)
+        ax.plot(
+            self.p_values,
+            self.result.purities,
+            "bs--",
+            label="Purity",
+            linewidth=2,
+            markersize=8,
+        )
+        ax.plot(
+            self.p_values,
+            self.result.entropies,
+            "g^-.",
+            label="Entropy",
+            linewidth=2,
+            markersize=8,
+        )
         ax.set_xlabel("페이즈-플립 확률 p", fontsize=12)
         ax.set_ylabel("충실도, 순수도, 엔트로피", fontsize=12)
         ax.set_title("페이즈-플립 확률 값 vs. 충실도, 순수도, 엔트로피", fontsize=14)
@@ -407,5 +452,3 @@ class PhaseFlipSimulation:
 
         plt.tight_layout()
         plt.show()
-
-__all__ = ['BitFlipSimulation', 'PhaseFlipSimulation']

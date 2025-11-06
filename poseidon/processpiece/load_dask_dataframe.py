@@ -4,6 +4,8 @@ Dask 라이브러리를 사용하여 데이터프레임을 불러오는 모듈�
 
 import os
 
+import numpy as np
+import pandas as pd
 import dask.dataframe as dd
 from dask.distributed import Client
 
@@ -54,7 +56,7 @@ def load_large_dataset(
                 file_path = os.path.join(dir_path, filename)
             else:
                 file_path = filename
-        
+
         # Dask 클라이언트 생성: 로컬 클러스터로 병렬 처리 (안전한 리소스 관리)
         with Client(
             n_workers=npartitions, threads_per_worker=1
@@ -100,4 +102,65 @@ def load_large_dataset(
         raise
 
 
-__all__ = ["load_large_dataset"]
+def switch_to_pandas(target, exclude_features: list = None):
+    if exclude_features is None:
+        exclude_features = [
+            "IPV4_SRC_ADDR",
+            "IPV4_DST_ADDR",
+            "L4_SRC_PORT",
+            "L4_DST_PORT",
+        ]
+    columns_list = [name for name in target.columns if name not in exclude_features]
+    if isinstance(target, dd.DataFrame):
+        return target.compute()
+    elif isinstance(target, np.ndarray):
+        return pd.DataFrame(target, columns=columns_list)
+    elif isinstance(target, pd.DataFrame):
+        return target[columns_list]
+    else:
+        raise ValueError(f"{type(target)}은(는) 지원되지 않는 데이터 타입입니다.")
+
+
+def switch_to_dask(target, exclude_features: list = None, npartitions: int = 20):
+    """
+    다양한 데이터 타입을 Dask DataFrame으로 변환하는 함수입니다.
+
+    Args:
+        target: 변환할 데이터 (ndarray, pd.DataFrame, 또는 dd.DataFrame)
+        exclude_features: 제외할 컬럼 리스트 (기본값: IP 주소 및 포트 관련 컬럼)
+        npartitions: Dask DataFrame의 파티션 수 (기본값: 20)
+
+    Returns:
+        dd.DataFrame: 변환된 Dask DataFrame
+    """
+    if exclude_features is None:
+        exclude_features = [
+            "IPV4_SRC_ADDR",
+            "IPV4_DST_ADDR",
+            "L4_SRC_PORT",
+            "L4_DST_PORT",
+        ]
+
+    if isinstance(target, dd.DataFrame):
+        # 이미 Dask DataFrame인 경우
+        columns_list = [name for name in target.columns if name not in exclude_features]
+        result = target[columns_list]
+        # 파티션 수 조정 (필요한 경우)
+        if result.npartitions != npartitions:
+            result = result.repartition(npartitions=npartitions)
+        return result
+    elif isinstance(target, pd.DataFrame):
+        # Pandas DataFrame을 Dask DataFrame으로 변환
+        columns_list = [name for name in target.columns if name not in exclude_features]
+        filtered_df = target[columns_list]
+        return dd.from_pandas(filtered_df, npartitions=npartitions)
+    elif isinstance(target, np.ndarray):
+        # NumPy 배열을 Dask DataFrame으로 변환
+        # 컬럼 이름이 없으므로 숫자로 생성하거나, exclude_features를 고려하지 않음
+        # 실제 사용 시 컬럼 이름을 제공하는 것이 좋지만, 여기서는 기본 처리
+        df = pd.DataFrame(target)
+        return dd.from_pandas(df, npartitions=npartitions)
+    else:
+        raise ValueError(
+            f"{type(target)}은(는) 지원되지 않는 데이터 타입입니다. ndarray, pd.DataFrame, 또는 dd.DataFrame만 지원됩니다."
+        )

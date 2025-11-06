@@ -221,6 +221,7 @@ class Oversampling:
                 if os.path.dirname(save_path)
                 else DATASETS_RESAMPLED_PATH
             )
+<<<<<<< Updated upstream
             os.makedirs(save_dir, exist_ok=True)
 
             # 파일명에서 확장자 제거 (예: "dataset-smote.csv" -> "dataset-smote")
@@ -238,3 +239,7 @@ class Oversampling:
 
 
 __all__ = ["Oversampling"]
+=======
+            resampled_df.to_csv(os.path.join(output_path, save_filename), index=index)
+            logger.info("  - Dask 데이터프레임 저장 완료")
+>>>>>>> Stashed changes

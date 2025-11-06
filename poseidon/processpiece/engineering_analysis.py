@@ -263,5 +263,3 @@ class DatasetAnalysis:
 
             plt.tight_layout()
             plt.show()
-
-__all__ = ['DatasetAnalysis']

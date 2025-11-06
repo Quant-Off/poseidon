@@ -52,6 +52,3 @@ def shuffle_and_split(part_df, label_col="Label", attack_col="Attack", random_st
     X = part_df.drop(columns=drop_cols)
 
     return X, y
-
-
-__all__ = ['clip_partition', 'shuffle_and_split']

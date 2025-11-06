@@ -1,6 +1,5 @@
-import poseidon.data.dataset as dataset
-import poseidon.data.dataset_type as dataset_types
-import poseidon.data.poseidon_dtypes as pdtypes
-import poseidon.data.smote_knn as oversampling
+from .poseidon_dtypes import dtypes
+from .smote_knn import smote, compute_knn
+from .dataset import clip_partition, shuffle_and_split
 
-__all__ = dataset.__all__ + oversampling.__all__ + pdtypes.__all__ + dataset_types.__all__
+__all__ = ["dtypes", "smote", "compute_knn", "clip_partition", "shuffle_and_split"]

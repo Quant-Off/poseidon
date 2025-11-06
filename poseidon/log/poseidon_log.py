@@ -21,11 +21,14 @@ if not LOG_FILE_NAME:
 class PoseidonLogger:
     """Poseidon 로깅 클래스입니다."""
 
-    def __init__(self, critical="✦ CRITICAL ",
-                 error="✦ ERROR ",
-                 warning="✦ WARNING ",
-                 info="✦ INFO ",
-                 debug="✦ DEBUG "):
+    def __init__(
+        self,
+        critical="✦ CRITICAL ",
+        error="✦ ERROR ",
+        warning="✦ WARNING ",
+        info="✦ INFO ",
+        debug="✦ DEBUG ",
+    ):
         # 로깅 레벨 설정 - 이름 변경
         critical = "✦ CRITICAL " if critical else "CRITICAL"
         error = "✦ ERROR " if error else "ERROR"
@@ -45,7 +48,9 @@ class PoseidonLogger:
         self.logger.setLevel(getattr(logging, log_level, logging.INFO))
 
         # 파일 핸들러 (색상 없음)
-        self.file_handler = logging.FileHandler(os.path.join(LOG_FILE_PATH, LOG_FILE_NAME), encoding="utf-8")
+        self.file_handler = logging.FileHandler(
+            os.path.join(LOG_FILE_PATH, LOG_FILE_NAME), encoding="utf-8"
+        )
         self.file_formatter = logging.Formatter(
             "%(asctime)s | %(levelname)-12s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
         )
@@ -69,9 +74,13 @@ class PoseidonLogger:
         self.console_handler.setFormatter(self.console_formatter)
 
         # 핸들러 중복 추가 방지
-        has_file_handler = any(isinstance(h, logging.FileHandler) for h in self.logger.handlers)
-        has_console_handler = any(isinstance(h, colorlog.StreamHandler) for h in self.logger.handlers)
-        
+        has_file_handler = any(
+            isinstance(h, logging.FileHandler) for h in self.logger.handlers
+        )
+        has_console_handler = any(
+            isinstance(h, colorlog.StreamHandler) for h in self.logger.handlers
+        )
+
         if not has_file_handler:
             self.logger.addHandler(self.file_handler)
         if not has_console_handler:
@@ -79,6 +88,3 @@ class PoseidonLogger:
 
     def get_logger(self):
         return self.logger
-
-
-__all__ = ['PoseidonLogger']

@@ -1,3 +1,3 @@
-import poseidon.log.poseidon_log as logger
+from .poseidon_log import PoseidonLogger
 
-__all__ = logger.__all__
+__all__ = ["PoseidonLogger"]

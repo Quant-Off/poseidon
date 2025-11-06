@@ -2,6 +2,7 @@ import dask.array as da
 import numpy as np
 import qutip as qt
 from poseidon.simulations.noise_modeling import BitFlipSimulation, PhaseFlipSimulation
+from poseidon.processpiece.load_dask_dataframe import switch_to_dask
 from poseidon.processpiece.engineering_using_features import (
     bytes_features,
     timing_variance_features,
@@ -212,4 +213,147 @@ def apply_quantum_noise_simulation(row):
         return 0.0  # 오류 시 기본값
 
 
-__all__ = ["apply_entropy", "apply_timing_variance", "apply_quantum_noise_simulation"]
+def adding_feature_shannon_entropy(to_df_X_train, to_df_X_val, to_df_X_test):
+    """
+    섀넌 엔트로피를 계산하여 packet_entropy 피처를 추가합니다.
+
+    Args:
+        to_df_X_train: 훈련 데이터 (np.ndarray 또는 dd.DataFrame)
+        to_df_X_val: 검증 데이터 (np.ndarray 또는 dd.DataFrame)
+        to_df_X_test: 테스트 데이터 (np.ndarray 또는 dd.DataFrame)
+
+    Returns:
+        tuple: (Dask DataFrame, Dask DataFrame, Dask DataFrame)
+    """
+
+    def apply_entropy_dask(row):
+        """엔트로피를 계산하고 float로 변환하는 래퍼 함수"""
+        result = apply_entropy(row)
+        # JAX array나 numpy array를 float로 변환
+        if hasattr(result, "item"):
+            return float(result.item())
+        elif (
+            hasattr(result, "__getitem__")
+            and hasattr(result, "__len__")
+            and len(result) == 1
+        ):
+            # 타입 체커를 위해 getattr로 안전하게 접근
+            getitem = getattr(result, "__getitem__", None)
+            if getitem is not None:
+                return float(getitem(0))
+            return float(result)
+        else:
+            return float(result)
+
+    # Dask 데이터프레임으로 변환 (이미 Dask DataFrame이면 컬럼명 보존)
+    to_df_X_train = switch_to_dask(to_df_X_train)
+    to_df_X_train["packet_entropy"] = to_df_X_train.apply(
+        apply_entropy_dask,
+        axis=1,
+        meta=("packet_entropy", "f8"),
+    )
+
+    to_df_X_val = switch_to_dask(to_df_X_val)
+    to_df_X_val["packet_entropy"] = to_df_X_val.apply(
+        apply_entropy_dask,
+        axis=1,
+        meta=("packet_entropy", "f8"),
+    )
+
+    to_df_X_test = switch_to_dask(to_df_X_test)
+    to_df_X_test["packet_entropy"] = to_df_X_test.apply(
+        apply_entropy_dask,
+        axis=1,
+        meta=("packet_entropy", "f8"),
+    )
+
+    return to_df_X_train, to_df_X_val, to_df_X_test
+
+
+def adding_feature_timing_variance(to_df_X_train, to_df_X_val, to_df_X_test):
+    def apply_timing_variance_dask(row):
+        """타이밍 변동을 계산하고 float로 변환하는 래퍼 함수"""
+        result = apply_timing_variance(row)
+        # JAX array나 numpy array를 float로 변환
+        if hasattr(result, "item"):
+            return float(result.item())
+        elif (
+            hasattr(result, "__getitem__")
+            and hasattr(result, "__len__")
+            and len(result) == 1
+        ):
+            # 타입 체커를 위해 getattr로 안전하게 접근
+            getitem = getattr(result, "__getitem__", None)
+            if getitem is not None:
+                return float(getitem(0))
+            return float(result)
+        else:
+            return float(result)
+
+    # Dask 데이터프레임으로 변환 (이미 Dask DataFrame이면 컬럼명 보존)
+    to_df_X_train = switch_to_dask(to_df_X_train)
+    to_df_X_train["timing_variance"] = to_df_X_train.apply(
+        apply_timing_variance_dask,
+        axis=1,
+        meta=("timing_variance", "f8"),
+    )
+
+    to_df_X_val = switch_to_dask(to_df_X_val)
+    to_df_X_val["timing_variance"] = to_df_X_val.apply(
+        apply_timing_variance_dask,
+        axis=1,
+        meta=("timing_variance", "f8"),
+    )
+
+    to_df_X_test = switch_to_dask(to_df_X_test)
+    to_df_X_test["timing_variance"] = to_df_X_test.apply(
+        apply_timing_variance_dask,
+        axis=1,
+        meta=("timing_variance", "f8"),
+    )
+
+    return to_df_X_train, to_df_X_val, to_df_X_test
+
+
+def adding_feature_quantum_noise_simulation(to_df_X_train, to_df_X_val, to_df_X_test):
+    def apply_quantum_noise_simulation_dask(row):
+        result = apply_quantum_noise_simulation(row)
+        # JAX array나 numpy array를 float로 변환
+        if hasattr(result, "item"):
+            return float(result.item())
+        elif (
+            hasattr(result, "__getitem__")
+            and hasattr(result, "__len__")
+            and len(result) == 1
+        ):
+            # 타입 체커를 위해 getattr로 안전하게 접근
+            getitem = getattr(result, "__getitem__", None)
+            if getitem is not None:
+                return float(getitem(0))
+            return float(result)
+        else:
+            return float(result)
+
+    # Dask 데이터프레임으로 변환 (이미 Dask DataFrame이면 컬럼명 보존)
+    to_df_X_train = switch_to_dask(to_df_X_train)
+    to_df_X_train["quantum_noise_simulation"] = to_df_X_train.apply(
+        apply_quantum_noise_simulation_dask,
+        axis=1,
+        meta=("quantum_noise_simulation", "f8"),
+    )
+
+    to_df_X_val = switch_to_dask(to_df_X_val)
+    to_df_X_val["quantum_noise_simulation"] = to_df_X_val.apply(
+        apply_quantum_noise_simulation_dask,
+        axis=1,
+        meta=("quantum_noise_simulation", "f8"),
+    )
+
+    to_df_X_test = switch_to_dask(to_df_X_test)
+    to_df_X_test["quantum_noise_simulation"] = to_df_X_test.apply(
+        apply_quantum_noise_simulation_dask,
+        axis=1,
+        meta=("quantum_noise_simulation", "f8"),
+    )
+
+    return to_df_X_train, to_df_X_val, to_df_X_test

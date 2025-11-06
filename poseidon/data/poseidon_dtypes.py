@@ -59,5 +59,3 @@ dtypes = {
     "Label": "int64",
     "Attack": "object",
 }
-
-__all__ = ['dtypes']

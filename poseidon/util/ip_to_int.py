@@ -7,4 +7,4 @@ def ip_to_int(ip):
     return struct.unpack("!I", socket.inet_aton(ip))[0]
 
 
-__all__ = ['ip_to_int']
+__all__ = ["ip_to_int"]
